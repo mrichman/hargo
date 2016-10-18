@@ -13,7 +13,12 @@ import (
 	"github.com/urfave/cli"
 )
 
-var version = "0.1.0-dev"
+var (
+	// Version is set by build.sh ldflags
+	Version string
+	// BuildTime is set by build.sh ldflags
+	BuildTime string
+)
 
 const usage = "work with HTTP Archive (.har) files"
 
@@ -27,8 +32,8 @@ func main() {
 
 	app := cli.NewApp()
 	app.Name = "hargo"
-	app.Version = version
-	app.Compiled = time.Now()
+	app.Version = Version + " (" + BuildTime + ")"
+	app.Compiled, _ = time.Parse(time.RFC3339, BuildTime)
 	app.Authors = []cli.Author{
 		{
 			Name:  "Mark A. Richman",
@@ -46,7 +51,6 @@ func main() {
 			Name:  "debug",
 			Usage: "Show debug output"},
 	}
-
 
 	app.Commands = []cli.Command{
 		{
@@ -82,7 +86,12 @@ func main() {
 				file, err := os.Open(harFile)
 				if err == nil {
 					r := newReader(file)
-					cmd, _ := hargo.ToCurl(r)
+					cmd, err := hargo.ToCurl(r)
+
+					if err != nil {
+						log.Error(err)
+					}
+
 					fmt.Println(cmd)
 				} else {
 					log.Fatal("Cannot open file: ", harFile)
