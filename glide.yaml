@@ -1,0 +1,17 @@
+package: github.com/mrichman/hargo
+import:
+- package: github.com/Sirupsen/logrus
+  version: ^0.10.0
+- package: github.com/davecgh/go-spew
+  version: ^1.0.0
+  subpackages:
+  - spew
+- package: github.com/influxdata/influxdb
+  version: ^1.0.2
+  subpackages:
+  - client/v2
+- package: github.com/urfave/cli
+  version: ^1.18.1
+- package: golang.org/x/net
+  subpackages:
+  - lex/httplex
