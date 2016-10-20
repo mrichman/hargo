@@ -1,6 +1,6 @@
 # <img src="./img/hargo-logo.png" height="40"> Hargo &nbsp;[![Hargo Build Status](https://travis-ci.org/mrichman/hargo.svg?branch=master)](https://travis-ci.org/mrichman/hargo)&nbsp;[![GoDoc](https://godoc.org/github.com/mrichman/hargo?status.svg)](https://godoc.org/github.com/mrichman/hargo)
 
-Hargo parses HAR files, can convert to curl format, and serve as a load test driver.
+Hargo parses [HAR](https://en.wikipedia.org/wiki/.har) files, can convert to curl format, and serve as a load test driver.
 
 ```
 NAME:
