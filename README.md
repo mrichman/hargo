@@ -1,4 +1,5 @@
-# <img src="./img/hargo-logo.png" height="40"> Hargo &nbsp;[![Hargo Build Status](https://travis-ci.org/mrichman/hargo.svg?branch=master)](https://travis-ci.org/mrichman/hargo)&nbsp;[![GoDoc](https://godoc.org/github.com/mrichman/hargo?status.svg)](https://godoc.org/github.com/mrichman/hargo)
+# <img src="./img/hargo-logo.png" height="40"> Hargo &nbsp;[![Hargo Build Status](https://travis-ci.org/mrichman/hargo.svg?branch=master)](https://travis-ci.org/mrichman/hargo)&nbsp;[![GoDoc](https://godoc.org/github.com/mrichman/hargo?status.svg)](https://godoc.org/github.com/mrichman/hargo) [![Go Report Card](https://goreportcard.com/badge/github.com/mrichman/hargo)](https://goreportcard.com/report/github.com/mrichman/hargo) [![Join the chat at https://gitter.im/mrichman/hargo](https://badges.gitter.im/mrichman/hargo.svg)](https://gitter.im/mrichman/hargo) [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mrichman/hargo/blob/master/LICENSE)
+
 
 Hargo parses [HAR](https://en.wikipedia.org/wiki/.har) files, can convert to curl format, and serve as a load test driver.
 
