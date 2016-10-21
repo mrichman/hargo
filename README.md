@@ -11,7 +11,7 @@ USAGE:
    hargo <command> [arguments] <.har file>
 
 VERSION:
-   0.1.1-dev.4
+   0.1.1-dev.5 (e9e0b9c)
 
 AUTHOR(S):
    Mark A. Richman <mark@markrichman.com>
@@ -40,6 +40,16 @@ COPYRIGHT:
 go get github.com/mrichman/hargo
 cd $GOPATH/src/github.com/mrichman/hargo
 go run cmd/hargo/hargo.go validate test/golang.org.har
+```
+
+## Building from source
+
+Make sure that you have Go version 1.7 or greater (I haven't tested with lower) and that your `GOPATH` env variable is set (I recommand setting it to `~/go` if you don't have one). If `GOBIN` is not set, also try setting that to `~/go/bin`, as `make install` may fail. You can check all Go environment variables with `go env`.
+
+```
+go get -d github.com/mrichman/hargo
+cd $GOPATH/src/github.com/mrichman/hargo
+make install
 ```
 
 ## About HAR Files
