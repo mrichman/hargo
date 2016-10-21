@@ -11,7 +11,7 @@ USAGE:
    hargo <command> [arguments] <.har file>
 
 VERSION:
-   0.1.0
+   0.1.1-dev.4
 
 AUTHOR(S):
    Mark A. Richman <mark@markrichman.com>
@@ -39,7 +39,7 @@ COPYRIGHT:
 ```
 go get github.com/mrichman/hargo
 cd $GOPATH/src/github.com/mrichman/hargo
-go run cmd/hargo/main.go validate test/golang.org.har
+go run cmd/hargo/hargo.go validate test/golang.org.har
 ```
 
 ## About HAR Files

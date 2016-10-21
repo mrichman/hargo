@@ -114,7 +114,7 @@ func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 			msg += fmt.Sprintf(" %d %dms", resp.StatusCode, latency)
 
 			log.Debug(msg)
-			
+
 			tr := TestResult{
 				URL:       req.URL.String(),
 				Status:    resp.StatusCode,
