@@ -204,7 +204,7 @@ type Cookie struct {
 	// (ISO 8601 YYYY-MM-DDThh:mm:ss.sTZD, e.g. 2009-07-24T19:20:30.123+02:00).
 	Expires string `json:"expires,omitempty"`
 	// optional Set to true if the cookie is HTTP only, false otherwise.
-	HTTPOnly string `json:"httpOnly,omitempty"`
+	HTTPOnly bool `json:"httpOnly,omitempty"`
 	// optional (new in 1.2) True if the cookie was transmitted over ssl, false
 	// otherwise.
 	Secure bool `json:"secure,omitempty"`
