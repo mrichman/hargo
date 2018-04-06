@@ -60,6 +60,25 @@ func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 
 		testResults := make([]TestResult, len(har.Log.Entries)) // batch results
 
+		jar, _ := cookiejar.New(nil)
+
+		httpClient := http.Client{
+			Transport: &http.Transport{
+				Dial: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).Dial,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ResponseHeaderTimeout: 10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+			CheckRedirect: func(r *http.Request, via []*http.Request) error {
+				r.URL.Opaque = r.URL.Path
+				return nil
+			},
+			Jar: jar,
+		}
+
 		for _, entry := range har.Log.Entries {
 
 			msg := fmt.Sprintf("[%d,%d] %s", wid, iter, entry.Request.URL)
@@ -68,26 +87,7 @@ func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 
 			check(err)
 
-			jar, _ := cookiejar.New(nil)
-
 			jar.SetCookies(req.URL, req.Cookies())
-
-			httpClient := http.Client{
-				Transport: &http.Transport{
-					Dial: (&net.Dialer{
-						Timeout:   30 * time.Second,
-						KeepAlive: 30 * time.Second,
-					}).Dial,
-					TLSHandshakeTimeout:   10 * time.Second,
-					ResponseHeaderTimeout: 10 * time.Second,
-					ExpectContinueTimeout: 1 * time.Second,
-				},
-				CheckRedirect: func(r *http.Request, via []*http.Request) error {
-					r.URL.Opaque = r.URL.Path
-					return nil
-				},
-				Jar: jar,
-			}
 
 			startTime := time.Now()
 			resp, err := httpClient.Do(req)
