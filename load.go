@@ -58,7 +58,7 @@ func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 
 	for {
 
-		testResults := make([]TestResult, len(har.Log.Entries)) // batch results
+		testResults := make([]TestResult, 0) // batch results
 
 		jar, _ := cookiejar.New(nil)
 
@@ -93,6 +93,7 @@ func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 			resp, err := httpClient.Do(req)
 			endTime := time.Now()
 			latency := int(endTime.Sub(startTime) / time.Millisecond)
+			method := req.Method
 
 			if err != nil {
 				log.Error(err)
@@ -101,9 +102,11 @@ func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 					Status:    0,
 					StartTime: startTime,
 					EndTime:   endTime,
-					Latency:   latency}
+					Latency:   latency,
+					Method:    method}
 
 				testResults = append(testResults, tr)
+
 				continue
 			}
 
@@ -120,7 +123,8 @@ func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 				Status:    resp.StatusCode,
 				StartTime: startTime,
 				EndTime:   endTime,
-				Latency:   latency}
+				Latency:   latency,
+				Method:    method}
 
 			testResults = append(testResults, tr)
 		}

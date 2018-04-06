@@ -64,7 +64,8 @@ func WritePoints(c client.Client, tr []TestResult) error {
 			"Status":    tr[i].Status,
 			"StartTime": tr[i].StartTime,
 			"EndTime":   tr[i].EndTime,
-			"Latency":   tr[i].Latency}
+			"Latency":   tr[i].Latency,
+			"Method":    tr[i].Method}
 
 		pt, err := client.NewPoint("test_result", nil, fields, time.Now())
 
