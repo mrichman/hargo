@@ -18,7 +18,7 @@ var useInfluxDB = true // just in case we can't connect, run tests without recor
 
 // LoadTest executes all HTTP requests in order concurrently
 // for a given number of workers.
-func LoadTest(r *bufio.Reader, workers int, timeout time.Duration, u url.URL) error {
+func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duration, u url.URL) error {
 
 	c, err := NewInfluxDBClient(u)
 
@@ -39,7 +39,7 @@ func LoadTest(r *bufio.Reader, workers int, timeout time.Duration, u url.URL) er
 
 	for i := 0; i < workers; i++ {
 		wg.Add(workers)
-		go processEntries(&har, &wg, i, c)
+		go processEntries(harfile, &har, &wg, i, c)
 	}
 
 	if waitTimeout(&wg, timeout) {
@@ -51,7 +51,7 @@ func LoadTest(r *bufio.Reader, workers int, timeout time.Duration, u url.URL) er
 	return nil
 }
 
-func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
+func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 	defer wg.Done()
 
 	iter := 0
@@ -103,7 +103,8 @@ func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 					StartTime: startTime,
 					EndTime:   endTime,
 					Latency:   latency,
-					Method:    method}
+					Method:    method,
+					HarFile:   harfile}
 
 				testResults = append(testResults, tr)
 
@@ -124,7 +125,8 @@ func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 				StartTime: startTime,
 				EndTime:   endTime,
 				Latency:   latency,
-				Method:    method}
+				Method:    method,
+				HarFile:   harfile}
 
 			testResults = append(testResults, tr)
 		}

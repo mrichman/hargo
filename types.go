@@ -335,4 +335,5 @@ type TestResult struct {
 	EndTime   time.Time `json:"endTime"`
 	Latency   int       `json:"latency"` // milliseconds
 	Method    string    `json:"method"`
+	HarFile   string    `json:"harfile"`
 }
