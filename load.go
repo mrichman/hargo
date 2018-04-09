@@ -18,7 +18,7 @@ var useInfluxDB = true // just in case we can't connect, run tests without recor
 
 // LoadTest executes all HTTP requests in order concurrently
 // for a given number of workers.
-func LoadTest(r *bufio.Reader, workers int, timeout time.Duration, u url.URL) error {
+func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duration, u url.URL) error {
 
 	c, err := NewInfluxDBClient(u)
 
@@ -39,7 +39,7 @@ func LoadTest(r *bufio.Reader, workers int, timeout time.Duration, u url.URL) er
 
 	for i := 0; i < workers; i++ {
 		wg.Add(workers)
-		go processEntries(&har, &wg, i, c)
+		go processEntries(harfile, &har, &wg, i, c)
 	}
 
 	if waitTimeout(&wg, timeout) {
@@ -51,14 +51,33 @@ func LoadTest(r *bufio.Reader, workers int, timeout time.Duration, u url.URL) er
 	return nil
 }
 
-func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
+func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 	defer wg.Done()
 
 	iter := 0
 
 	for {
 
-		testResults := make([]TestResult, len(har.Log.Entries)) // batch results
+		testResults := make([]TestResult, 0) // batch results
+
+		jar, _ := cookiejar.New(nil)
+
+		httpClient := http.Client{
+			Transport: &http.Transport{
+				Dial: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).Dial,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ResponseHeaderTimeout: 10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+			CheckRedirect: func(r *http.Request, via []*http.Request) error {
+				r.URL.Opaque = r.URL.Path
+				return nil
+			},
+			Jar: jar,
+		}
 
 		for _, entry := range har.Log.Entries {
 
@@ -68,31 +87,13 @@ func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 
 			check(err)
 
-			jar, _ := cookiejar.New(nil)
-
 			jar.SetCookies(req.URL, req.Cookies())
-
-			httpClient := http.Client{
-				Transport: &http.Transport{
-					Dial: (&net.Dialer{
-						Timeout:   30 * time.Second,
-						KeepAlive: 30 * time.Second,
-					}).Dial,
-					TLSHandshakeTimeout:   10 * time.Second,
-					ResponseHeaderTimeout: 10 * time.Second,
-					ExpectContinueTimeout: 1 * time.Second,
-				},
-				CheckRedirect: func(r *http.Request, via []*http.Request) error {
-					r.URL.Opaque = r.URL.Path
-					return nil
-				},
-				Jar: jar,
-			}
 
 			startTime := time.Now()
 			resp, err := httpClient.Do(req)
 			endTime := time.Now()
 			latency := int(endTime.Sub(startTime) / time.Millisecond)
+			method := req.Method
 
 			if err != nil {
 				log.Error(err)
@@ -101,9 +102,12 @@ func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 					Status:    0,
 					StartTime: startTime,
 					EndTime:   endTime,
-					Latency:   latency}
+					Latency:   latency,
+					Method:    method,
+					HarFile:   harfile}
 
 				testResults = append(testResults, tr)
+
 				continue
 			}
 
@@ -120,7 +124,9 @@ func processEntries(har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
 				Status:    resp.StatusCode,
 				StartTime: startTime,
 				EndTime:   endTime,
-				Latency:   latency}
+				Latency:   latency,
+				Method:    method,
+				HarFile:   harfile}
 
 			testResults = append(testResults, tr)
 		}

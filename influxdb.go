@@ -15,10 +15,11 @@ var db string
 // NewInfluxDBClient returns a new InfluxDB client
 func NewInfluxDBClient(u url.URL) (client.Client, error) {
 
-	log.Print("Connecting to InfluxDB: ", u.String())
+	addr := fmt.Sprintf("%s://%s:%s", u.Scheme, u.Hostname(), u.Port())
+	log.Print("Connecting to InfluxDB: ", addr)
 
 	c, err := client.NewHTTPClient(client.HTTPConfig{
-		Addr: u.String(),
+		Addr: addr,
 	})
 
 	if err != nil {
@@ -64,7 +65,9 @@ func WritePoints(c client.Client, tr []TestResult) error {
 			"Status":    tr[i].Status,
 			"StartTime": tr[i].StartTime,
 			"EndTime":   tr[i].EndTime,
-			"Latency":   tr[i].Latency}
+			"Latency":   tr[i].Latency,
+			"Method":    tr[i].Method,
+			"HarFile":   tr[i].HarFile}
 
 		pt, err := client.NewPoint("test_result", nil, fields, time.Now())
 

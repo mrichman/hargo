@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -208,7 +209,7 @@ func main() {
 						os.Exit(-1)
 					}
 
-					hargo.LoadTest(r, workers, time.Duration(duration)*time.Second, *u)
+					hargo.LoadTest(filepath.Base(harFile), r, workers, time.Duration(duration)*time.Second, *u)
 				} else {
 					log.Fatal("Cannot open file: ", harFile)
 					os.Exit(-1)

@@ -2,8 +2,10 @@ package hargo
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"net/url"
 
 	"golang.org/x/net/lex/httplex"
 
@@ -25,7 +27,19 @@ func Decode(r *bufio.Reader) (Har, error) {
 
 // EntryToRequest converts a HAR entry type to an http.Request
 func EntryToRequest(entry *Entry) (*http.Request, error) {
-	req, _ := http.NewRequest(entry.Request.Method, entry.Request.URL, nil)
+	body := ""
+
+	if len(entry.Request.PostData.Params) == 0 {
+		body = entry.Request.PostData.Text
+	} else {
+		form := url.Values{}
+		for _, p := range entry.Request.PostData.Params {
+			form.Add(p.Name, p.Value)
+		}
+		body = form.Encode()
+	}
+
+	req, _ := http.NewRequest(entry.Request.Method, entry.Request.URL, bytes.NewBuffer([]byte(body)))
 
 	for _, h := range entry.Request.Headers {
 		if httplex.ValidHeaderFieldName(h.Name) && httplex.ValidHeaderFieldValue(h.Value) {
