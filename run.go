@@ -25,8 +25,6 @@ func Run(r *bufio.Reader) error {
 	}
 
 	for _, entry := range har.Log.Entries {
-		fmt.Printf("[%s] URL: %s\n", entry.Request.Method, entry.Request.URL)
-
 		req, err := EntryToRequest(&entry)
 
 		check(err)
@@ -36,6 +34,8 @@ func Run(r *bufio.Reader) error {
 		resp, err := client.Do(req)
 
 		check(err)
+
+		fmt.Printf("[%s,%v] URL: %s\n", entry.Request.Method, resp.StatusCode, entry.Request.URL)
 
 		if resp != nil {
 			resp.Body.Close()
