@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"sort"
 
 	"golang.org/x/net/lex/httplex"
 
@@ -21,6 +22,12 @@ func Decode(r *bufio.Reader) (Har, error) {
 	if err != nil {
 		log.Error(err)
 	}
+
+	// Sort the entries by StartedDateTime to ensure they will be processed
+	// in the same order as they happened
+	sort.Slice(har.Log.Entries, func(i, j int) bool {
+		return har.Log.Entries[i].StartedDateTime < har.Log.Entries[j].StartedDateTime
+	})
 
 	return har, err
 }

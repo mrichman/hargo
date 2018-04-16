@@ -14,28 +14,28 @@ func Run(r *bufio.Reader) error {
 
 	check(err)
 
-	for _, entry := range har.Log.Entries {
-		fmt.Printf("URL: %s\n", entry.Request.URL)
+	jar, _ := cookiejar.New(nil)
 
+	client := http.Client{
+		CheckRedirect: func(r *http.Request, via []*http.Request) error {
+			r.URL.Opaque = r.URL.Path
+			return nil
+		},
+		Jar: jar,
+	}
+
+	for _, entry := range har.Log.Entries {
 		req, err := EntryToRequest(&entry)
 
 		check(err)
 
-		jar, _ := cookiejar.New(nil)
-
 		jar.SetCookies(req.URL, req.Cookies())
-
-		client := http.Client{
-			CheckRedirect: func(r *http.Request, via []*http.Request) error {
-				r.URL.Opaque = r.URL.Path
-				return nil
-			},
-			Jar: jar,
-		}
 
 		resp, err := client.Do(req)
 
 		check(err)
+
+		fmt.Printf("[%s,%v] URL: %s\n", entry.Request.Method, resp.StatusCode, entry.Request.URL)
 
 		if resp != nil {
 			resp.Body.Close()
