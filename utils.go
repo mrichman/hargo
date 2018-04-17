@@ -33,7 +33,7 @@ func Decode(r *bufio.Reader) (Har, error) {
 }
 
 // EntryToRequest converts a HAR entry type to an http.Request
-func EntryToRequest(entry *Entry) (*http.Request, error) {
+func EntryToRequest(entry *Entry, ignoreHarCookies bool) (*http.Request, error) {
 	body := ""
 
 	if len(entry.Request.PostData.Params) == 0 {
@@ -49,14 +49,16 @@ func EntryToRequest(entry *Entry) (*http.Request, error) {
 	req, _ := http.NewRequest(entry.Request.Method, entry.Request.URL, bytes.NewBuffer([]byte(body)))
 
 	for _, h := range entry.Request.Headers {
-		if httplex.ValidHeaderFieldName(h.Name) && httplex.ValidHeaderFieldValue(h.Value) {
+		if httplex.ValidHeaderFieldName(h.Name) && httplex.ValidHeaderFieldValue(h.Value) && h.Name != "Cookie" {
 			req.Header.Add(h.Name, h.Value)
 		}
 	}
 
-	for _, c := range entry.Request.Cookies {
-		cookie := &http.Cookie{Name: c.Name, Value: c.Value, HttpOnly: false, Domain: c.Domain}
-		req.AddCookie(cookie)
+	if !ignoreHarCookies {
+		for _, c := range entry.Request.Cookies {
+			cookie := &http.Cookie{Name: c.Name, Value: c.Value, HttpOnly: false, Domain: c.Domain}
+			req.AddCookie(cookie)
+		}
 	}
 
 	return req, nil

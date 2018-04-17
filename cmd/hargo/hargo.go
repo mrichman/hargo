@@ -108,13 +108,19 @@ func main() {
 			UsageText:   "run - execute all requests in .har file",
 			Description: "execute all requests in .har file",
 			ArgsUsage:   "<.har file>",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "ignore-har-cookies",
+					Usage: "Ignore the cookies provided by the HAR entries"},
+			},
 			Action: func(c *cli.Context) {
+				ignoreHarCookies := c.Bool("ignore-har-cookies")
 				harFile := c.Args().First()
 				log.Info("run .har file: ", harFile)
 				file, err := os.Open(harFile)
 				if err == nil {
 					r := newReader(file)
-					hargo.Run(r)
+					hargo.Run(r, ignoreHarCookies)
 				} else {
 					log.Fatal("Cannot open file: ", harFile)
 					os.Exit(-1)
@@ -181,6 +187,9 @@ func main() {
 					Name:  "influxurl, u",
 					Value: "http://localhost:8086/hargo",
 					Usage: "InfluxDB URL (default http://localhost:8086/hargo)"},
+				cli.BoolFlag{
+					Name:  "ignore-har-cookies",
+					Usage: "Ignore the cookies provided by the HAR entries"},
 			},
 			Action: func(c *cli.Context) {
 
@@ -203,13 +212,14 @@ func main() {
 					workers := c.Int("w")
 					duration := c.Int("d")
 					u, err := url.Parse(c.String("u"))
+					ignoreHarCookies := c.Bool("ignore-har-cookies")
 
 					if err != nil {
 						log.Fatal("Invalid InfluxDB URL: ", c.String("u"))
 						os.Exit(-1)
 					}
 
-					hargo.LoadTest(filepath.Base(harFile), r, workers, time.Duration(duration)*time.Second, *u)
+					hargo.LoadTest(filepath.Base(harFile), r, workers, time.Duration(duration)*time.Second, *u, ignoreHarCookies)
 				} else {
 					log.Fatal("Cannot open file: ", harFile)
 					os.Exit(-1)
