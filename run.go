@@ -8,7 +8,7 @@ import (
 )
 
 // Run executes all entries in .har file
-func Run(r *bufio.Reader) error {
+func Run(r *bufio.Reader, ignoreHarCookies bool) error {
 
 	har, err := Decode(r)
 
@@ -25,7 +25,7 @@ func Run(r *bufio.Reader) error {
 	}
 
 	for _, entry := range har.Log.Entries {
-		req, err := EntryToRequest(&entry)
+		req, err := EntryToRequest(&entry, ignoreHarCookies)
 
 		check(err)
 

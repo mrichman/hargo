@@ -18,7 +18,7 @@ var useInfluxDB = true // just in case we can't connect, run tests without recor
 
 // LoadTest executes all HTTP requests in order concurrently
 // for a given number of workers.
-func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duration, u url.URL) error {
+func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duration, u url.URL, ignoreHarCookies bool) error {
 
 	c, err := NewInfluxDBClient(u)
 
@@ -39,7 +39,7 @@ func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duratio
 
 	for i := 0; i < workers; i++ {
 		wg.Add(workers)
-		go processEntries(harfile, &har, &wg, i, c)
+		go processEntries(harfile, &har, &wg, i, c, ignoreHarCookies)
 	}
 
 	if waitTimeout(&wg, timeout) {
@@ -51,7 +51,7 @@ func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duratio
 	return nil
 }
 
-func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c client.Client) {
+func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c client.Client, ignoreHarCookies bool) {
 	defer wg.Done()
 
 	iter := 0
@@ -83,7 +83,7 @@ func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c cli
 
 			msg := fmt.Sprintf("[%d,%d] %s", wid, iter, entry.Request.URL)
 
-			req, err := EntryToRequest(&entry)
+			req, err := EntryToRequest(&entry, ignoreHarCookies)
 
 			check(err)
 
