@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"sort"
 
-	"golang.org/x/net/lex/httplex"
+	"golang.org/x/net/http/httpguts"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -49,7 +49,7 @@ func EntryToRequest(entry *Entry, ignoreHarCookies bool) (*http.Request, error) 
 	req, _ := http.NewRequest(entry.Request.Method, entry.Request.URL, bytes.NewBuffer([]byte(body)))
 
 	for _, h := range entry.Request.Headers {
-		if httplex.ValidHeaderFieldName(h.Name) && httplex.ValidHeaderFieldValue(h.Value) && h.Name != "Cookie" {
+		if httpguts.ValidHeaderFieldName(h.Name) && httpguts.ValidHeaderFieldValue(h.Value) && h.Name != "Cookie" {
 			req.Header.Add(h.Name, h.Value)
 		}
 	}
