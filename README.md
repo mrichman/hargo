@@ -1,9 +1,13 @@
-# <img src="./img/hargo-logo.png" height="40"> Hargo &nbsp;[![Hargo Build Status](https://travis-ci.org/mrichman/hargo.svg?branch=master)](https://travis-ci.org/mrichman/hargo)&nbsp;[![GoDoc](https://godoc.org/github.com/mrichman/hargo?status.svg)](https://godoc.org/github.com/mrichman/hargo) [![Go Report Card](https://goreportcard.com/badge/github.com/mrichman/hargo)](https://goreportcard.com/report/github.com/mrichman/hargo) [![Join the chat at https://gitter.im/mrichman/hargo](https://badges.gitter.im/mrichman/hargo.svg)](https://gitter.im/mrichman/hargo) [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mrichman/hargo/blob/master/LICENSE) [![Issues](http://img.shields.io/github/issues/mrichman/hargo.svg)]( https://github.com/mrichman/hargo/issues )
+<!-- markdownlint-disable MD033 -->
 
+# <img src="./img/hargo-logo.png" height="40"> Hargo
+
+[![Hargo Build Status](https://travis-ci.org/mrichman/hargo.svg?branch=master)](https://travis-ci.org/mrichman/hargo)&nbsp;[![GoDoc](https://godoc.org/github.com/mrichman/hargo?status.svg)](https://godoc.org/github.com/mrichman/hargo) [![Go Report Card](https://goreportcard.com/badge/github.com/mrichman/hargo)](https://goreportcard.com/report/github.com/mrichman/hargo) [![Join the chat at https://gitter.im/mrichman/hargo](https://badges.gitter.im/mrichman/hargo.svg)](https://gitter.im/mrichman/hargo) [![GitHub license](https://img.shields.io/github/license/mrichman/hargo.svg)](https://github.com/mrichman/hargo/blob/master/LICENSE)
+ [![GitHub issues](https://img.shields.io/github/issues/mrichman/hargo.svg)](https://github.com/mrichman/hargo/issues) [![Twitter](https://img.shields.io/twitter/url/https/github.com/mrichman/hargo.svg?style=plastic)](https://twitter.com/intent/tweet?text=Wow:&url=https%3A%2F%2Fgithub.com%2Fmrichman%2Fhargo)
 
 Hargo parses [HAR](https://en.wikipedia.org/wiki/.har) files, can convert to curl format, and serve as a load test driver.
 
-```
+```text
 NAME:
    hargo - work with HTTP Archive (.har) files
 
@@ -11,7 +15,7 @@ USAGE:
    hargo <command> [arguments] <.har file>
 
 VERSION:
-   0.1.1-dev.5 (e9e0b9c)
+   0.1.1-dev.26 (519b183)
 
 AUTHOR(S):
    Mark A. Richman <mark@markrichman.com>
@@ -31,12 +35,12 @@ GLOBAL OPTIONS:
    --version, -v  print the version
 
 COPYRIGHT:
-   (c) 2016 Mark A. Richman
+   (c) 2018 Mark A. Richman
 ```
 
 ## Running Hargo
 
-```
+```text
 go get github.com/mrichman/hargo
 cd $GOPATH/src/github.com/mrichman/hargo
 go run cmd/hargo/hargo.go validate test/golang.org.har
@@ -46,7 +50,7 @@ go run cmd/hargo/hargo.go validate test/golang.org.har
 
 Make sure that you have Go version 1.7 or greater (I haven't tested with lower) and that your `GOPATH` env variable is set (I recommand setting it to `~/go` if you don't have one). If `GOBIN` is not set, also try setting that to `~/go/bin`, as `make install` may fail. You can check all Go environment variables with `go env`.
 
-```
+```text
 go get -d github.com/mrichman/hargo
 cd $GOPATH/src/github.com/mrichman/hargo
 make install
@@ -93,7 +97,7 @@ The `validate` command will report any errors in the format of a .har file.
 
 `hargo validate foo.har`
 
-HAR file format is defined here: https://w3c.github.io/web-performance/specs/HAR/Overview.html
+HAR file format is defined here: <https://w3c.github.io/web-performance/specs/HAR/Overview.html>
 
 ### Dump
 
@@ -105,7 +109,7 @@ Dump prints information about all HTTP requests in .har file
 
 Hargo can act as a load test agent. Given a .har file, hargo can spawn a number of concurrent workers to repeat each HTTP request in order. By default, hargo will spawn 10 workers and run for a duration of 60 seconds.
 
-Hargo will also save its results to InfluxDB, if available. Each HTTP response is stored as a point of time-series data, which can be graphed by [Chronograf](https://www.influxdata.com/time-series-platform/chronograf/), [Grafana](http://grafana.org/), or similar visualization tool for analysis.
+Hargo will also save its results to [InfluxDB](https://www.influxdata.com/), if available. Each HTTP response is stored as a point of time-series data, which can be graphed by [Chronograf](https://www.influxdata.com/time-series-platform/chronograf/), [Grafana](http://grafana.org/), or similar visualization tool for analysis.
 
 # Contributing
 

@@ -11,7 +11,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/mrichman/hargo"
-	"github.com/urfave/cli"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -42,7 +42,7 @@ func main() {
 			Email: "mark@markrichman.com",
 		},
 	}
-	app.Copyright = "(c) 2016 Mark A. Richman"
+	app.Copyright = "(c) 2018 Mark A. Richman"
 	app.HelpName = "hargo"
 	app.Usage = usage
 	app.UsageText = "hargo <command> [arguments] <.har file>"

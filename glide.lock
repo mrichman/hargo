@@ -1,27 +1,44 @@
-hash: ede146e2e3830edd0b4c1af1704020b2e7bdebcf9e01a83e4f6614fdb689661a
-updated: 2016-10-13T10:46:16.92542263-04:00
+hash: 0a59be7ebd39b17be5d6c82c7e90e8db6526cceb4fe02b3d040208f3f6eb7503
+updated: 2018-08-03T16:01:42.251955-04:00
 imports:
+- name: github.com/blang/semver
+  version: 2ee87856327ba09384cabd113bc6b5d174e9ec0f
 - name: github.com/davecgh/go-spew
-  version: 6cf5744a041a0022271cefed95ba843f6d87fd51
+  version: 346938d642f2ec3594ed81d874461961cd0faa76
   subpackages:
   - spew
 - name: github.com/influxdata/influxdb
-  version: ff307047057b7797418998a4ed709b0c0f346324
+  version: 7520f0f77e71a7870b41204821ac8cfa95d9704d
   subpackages:
   - client/v2
   - models
   - pkg/escape
+- name: github.com/mrichman/hargo
+  version: 0d27bbf485a68ea17a636f747dd2e6db58321be6
 - name: github.com/Sirupsen/logrus
-  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
-- name: github.com/urfave/cli
-  version: a14d7d367bc02b1f57d88de97926727f2d936387
-- name: golang.org/x/net
-  version: 8b4af36cd21a1f85a7484b49feb7c79363106d8e
+  version: 3e01752db0189b9157070a0e1668a620f9a85da2
+- name: golang.org/x/crypto
+  version: 56440b844dfe139a8ac053f4ecac0b20b79058f4
   subpackages:
+  - ssh/terminal
+- name: golang.org/x/net
+  version: 92b859f39abd2d91a854c9f9c4621b2f5054a92d
+  subpackages:
+  - http/httpguts
   - idna
   - lex/httplex
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: d8e400bc7db4870d786864138af681469693d18c
   subpackages:
   - unix
+  - windows
+- name: golang.org/x/text
+  version: f21a4dfb5e38f5895301dc265a8def02365cc3d0
+  subpackages:
+  - secure/bidirule
+  - transform
+  - unicode/bidi
+  - unicode/norm
+- name: gopkg.in/urfave/cli.v1
+  version: cfb38830724cc34fedffe9a2a29fb54fa9169cd1
 testImports: []
