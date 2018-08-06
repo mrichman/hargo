@@ -17,8 +17,10 @@ import (
 var (
 	// Version is the version number or commit hash
 	// These variables should be set by the linker when compiling
-	Version     = "Unknown"
-	CommitHash  = "Unknown"
+	Version = "Unknown"
+	// CommitHash is the commit this version was built on
+	CommitHash = "Unknown"
+	// CompileDate is the date this binary was compiled on
 	CompileDate = "Unknown"
 )
 
