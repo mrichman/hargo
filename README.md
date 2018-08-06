@@ -110,11 +110,3 @@ Dump prints information about all HTTP requests in .har file
 Hargo can act as a load test agent. Given a .har file, hargo can spawn a number of concurrent workers to repeat each HTTP request in order. By default, hargo will spawn 10 workers and run for a duration of 60 seconds.
 
 Hargo will also save its results to [InfluxDB](https://www.influxdata.com/), if available. Each HTTP response is stored as a point of time-series data, which can be graphed by [Chronograf](https://www.influxdata.com/time-series-platform/chronograf/), [Grafana](http://grafana.org/), or similar visualization tool for analysis.
-
-# Contributing
-
-If you find any bugs, please report them! I am also happy to accept pull requests from anyone.
-
-You can use the [GitHub issue tracker](https://github.com/mrichman/hargo/issues) to report bugs, ask questions, or suggest new features.
-
-For a more informal setting to discuss this project, you can join the [Gitter chat](https://gitter.im/mrichman/hargo).
