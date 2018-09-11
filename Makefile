@@ -1,5 +1,10 @@
 .PHONY: runtime
 
+IMAGE := hargo
+VERSION := $(shell git rev-parse HEAD)
+BUILD_DATE := $(shell date -R)
+VCS_URL := $(shell basename `git rev-parse --show-toplevel`)
+VCS_REF := $(shell git log -1 --pretty=%h)
 VERSION = $(shell go run tools/build-version.go)
 HASH = $(shell git rev-parse --short HEAD)
 DATE = $(shell go run tools/build-date.go)
@@ -41,3 +46,11 @@ test:
 
 clean:
 	rm -f hargo
+
+docker:
+	docker build --rm -t ${IMAGE} --build-arg VERSION="${VERSION}" \
+	--build-arg BUILD_DATE="${BUILD_DATE}" \
+	--build-arg VCS_URL="${VCS_URL}" \
+	--build-arg VCS_REF="${VCS_REF}" \
+	--build-arg NAME="${NAME}" \
+	--build-arg VENDOR="${VENDOR}" .
