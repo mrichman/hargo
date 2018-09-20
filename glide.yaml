@@ -13,7 +13,7 @@ import:
   subpackages:
   - client/v2
 - package: github.com/mrichman/hargo
-  version: ^0.1.0
+  version: ^0.1.1
 - package: golang.org/x/net
   subpackages:
   - http/httpguts
