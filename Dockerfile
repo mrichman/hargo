@@ -4,6 +4,7 @@
 FROM golang:1.11 AS builder
 WORKDIR /go/src/github.com/mrichman/hargo
 COPY . .
+ENV GO111MODULE=on
 RUN go get -d -v
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
 
