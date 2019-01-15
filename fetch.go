@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/davecgh/go-spew/spew"
+	log "github.com/sirupsen/logrus"
 )
 
 // Fetch downloads all resources references in .har file

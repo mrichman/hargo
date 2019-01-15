@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	client "github.com/influxdata/influxdb/client/v2"
+	log "github.com/sirupsen/logrus"
 )
 
 var useInfluxDB = true // just in case we can't connect, run tests without recording results
