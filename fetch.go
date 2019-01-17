@@ -9,9 +9,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,7 +37,9 @@ func Fetch(r *bufio.Reader) error {
 		req, _ := http.NewRequest(entry.Request.Method, entry.Request.URL, nil)
 
 		for _, h := range entry.Request.Headers {
-			req.Header.Add(h.Name, h.Value)
+			if !strings.HasPrefix(h.Name, ":") {
+				req.Header.Add(h.Name, h.Value)
+			}
 		}
 
 		for _, c := range entry.Request.Cookies {
@@ -93,8 +95,8 @@ func downloadFile(req *http.Request, outdir string) error {
 		Jar: jar,
 	}
 
-	spew.Dump(client)
-	spew.Dump(req)
+	// spew.Dump(client)
+	// spew.Dump(req)
 
 	resp, err := client.Do(req) //.Get(rawURL) // add a filter to check redirect
 
