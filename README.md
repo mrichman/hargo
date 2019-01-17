@@ -15,9 +15,9 @@ USAGE:
    hargo <command> [arguments] <.har file>
 
 VERSION:
-   0.1.1-dev.26 (519b183)
+   0.1.2-dev.16 (28c9ef4)
 
-AUTHOR(S):
+AUTHOR:
    Mark A. Richman <mark@markrichman.com>
 
 COMMANDS:
@@ -30,12 +30,12 @@ COMMANDS:
      help, h      Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --debug        enable verbose (debug) logging
+   --debug        Show debug output
    --help, -h     show help
    --version, -v  print the version
 
 COPYRIGHT:
-   (c) 2018 Mark A. Richman
+   (c) 2019 Mark A. Richman
 ```
 
 ## Running Hargo
