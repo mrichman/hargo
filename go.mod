@@ -1,6 +1,7 @@
 module github.com/mrichman/hargo
 
 require (
+	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/davecgh/go-spew v1.1.1
 	github.com/influxdata/influxdb v1.6.3
 	github.com/sirupsen/logrus v1.3.0
