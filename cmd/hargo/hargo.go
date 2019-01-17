@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/mrichman/hargo"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -44,7 +44,7 @@ func main() {
 			Email: "mark@markrichman.com",
 		},
 	}
-	app.Copyright = "(c) 2018 Mark A. Richman"
+	app.Copyright = "(c) 2019 Mark A. Richman"
 	app.HelpName = "hargo"
 	app.Usage = usage
 	app.UsageText = "hargo <command> [arguments] <.har file>"

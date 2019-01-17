@@ -8,12 +8,15 @@ VCS_REF := $(shell git log -1 --pretty=%h)
 VERSION = $(shell go run tools/build-version.go)
 HASH = $(shell git rev-parse --short HEAD)
 DATE = $(shell go run tools/build-date.go)
+GOMINORVERSION = $(shell go version | cut -d ' ' -f 3 | cut -d '.' -f 2)
+GOMODULESUPPORT = $(shell echo $(GOMINORVERSION)\<11 | bc)
 
 GOBIN ?= $($GOPATH)/bin
 
 # Builds hargo after checking dependencies
-build: deps
+build: deps	
 	go build -ldflags "-s -w -X main.Version=$(VERSION) -X main.CommitHash=$(HASH) -X 'main.CompileDate=$(DATE)'" -o hargo ./cmd/hargo
+
 # Builds hargo after checking dependencies
 build-all: build
 
@@ -33,8 +36,11 @@ install-quick:
 	go install -ldflags "-s -w -X main.Version=$(VERSION) -X main.CommitHash=$(HASH) -X 'main.CompileDate=$(DATE)'" ./cmd/hargo
 
 # Checks for dependencies
-deps:
-	glide install
+deps:	
+ifeq ($(GOMODULESUPPORT),1)
+	@echo Go minor version: $(GOMINORVERSION) does not support modules, using Glide 
+	glide install  
+endif
 
 update:
 	git pull
