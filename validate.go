@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // Validate validates the format of a .har file

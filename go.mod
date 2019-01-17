@@ -1,22 +1,17 @@
 module github.com/mrichman/hargo
 
 require (
-	github.com/Sirupsen/logrus v1.0.6
 	github.com/blang/semver v3.5.1+incompatible
-	github.com/davecgh/go-spew v1.1.0
+	github.com/davecgh/go-spew v1.1.1
 	github.com/fsnotify/fsnotify v1.4.7 // indirect
 	github.com/golang/protobuf v1.1.0 // indirect
 	github.com/hpcloud/tail v1.0.0 // indirect
 	github.com/influxdata/influxdb v0.0.0-20180803190631-7520f0f77e71
 	github.com/onsi/ginkgo v1.6.0 // indirect
 	github.com/onsi/gomega v1.4.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/sirupsen/logrus v1.0.6 // indirect
-	github.com/stretchr/testify v1.2.2 // indirect
-	golang.org/x/crypto v0.0.0-20180802221240-56440b844dfe // indirect
+	github.com/sirupsen/logrus v1.3.0
 	golang.org/x/net v0.0.0-20180801234040-f4c29de78a2a
 	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f // indirect
-	golang.org/x/sys v0.0.0-20180319153314-d8e400bc7db4 // indirect
 	golang.org/x/text v0.3.0 // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/fsnotify.v1 v1.4.7 // indirect

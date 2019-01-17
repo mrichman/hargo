@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/net/http/httpguts"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // Decode reads from a reader and returns Har object

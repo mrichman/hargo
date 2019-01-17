@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	client "github.com/influxdata/influxdb/client/v2"
+	log "github.com/sirupsen/logrus"
 )
 
 var db string
