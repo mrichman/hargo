@@ -5,12 +5,17 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
+	"time"
 )
 
 // Run executes all entries in .har file
 func Run(r *bufio.Reader, ignoreHarCookies bool) error {
 
 	har, err := Decode(r)
+
+	if err != nil {
+		return err
+	}
 
 	check(err)
 
@@ -24,8 +29,26 @@ func Run(r *bufio.Reader, ignoreHarCookies bool) error {
 		Jar: jar,
 	}
 
+	if len(har.Log.Entries) == 0 {
+		return nil
+	}
+
+	first, _ := time.Parse("2006-01-02T15:04:05.000Z", har.Log.Entries[0].StartedDateTime)
+
 	for _, entry := range har.Log.Entries {
+
+		st, _ := time.Parse("2006-01-02T15:04:05.000Z", entry.StartedDateTime)
+		diffst := st.Sub(first)
+		if diffst > 0 {
+			time.Sleep(diffst * time.Nanosecond)
+		}
+		first = st
+
 		req, err := EntryToRequest(&entry, ignoreHarCookies)
+
+		if err != nil {
+			return err
+		}
 
 		check(err)
 

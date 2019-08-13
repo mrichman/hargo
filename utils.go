@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 
 	"golang.org/x/net/http/httpguts"
 
@@ -21,6 +22,14 @@ func Decode(r *bufio.Reader) (Har, error) {
 
 	if err != nil {
 		log.Error(err)
+	}
+
+	// Delete ws:// entries as they block execution
+	for i, entry := range har.Log.Entries {
+		if strings.HasPrefix(entry.Request.URL, "ws://") {
+			har.Log.Entries[i] = har.Log.Entries[len(har.Log.Entries)-1]
+			har.Log.Entries = har.Log.Entries[:len(har.Log.Entries)-1]
+		}
 	}
 
 	// Sort the entries by StartedDateTime to ensure they will be processed
