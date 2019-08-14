@@ -1,17 +1,30 @@
 # This is a multi-stage build.
 
 # build stage
-FROM golang:1.11 AS builder
-WORKDIR /go/src/github.com/mrichman/hargo
-COPY . .
+FROM golang:1.11-alpine3.10 AS builder
+WORKDIR /go/src/hargo
+COPY . /go/src/hargo
+
+ARG VERSION
+ARG HASH
+ARG DATE
+
 ENV GO111MODULE=on
-RUN go get -d -v
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
+ENV GOPROXY=https://proxy.golang.org
+RUN go mod download
+
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+
+RUN go build -ldflags "-s -w -X main.Version=$VERSION -X main.CommitHash=$HASH -X 'main.CompileDate=$DATE'" -o hargo ./cmd/hargo
 
 # final stage
 FROM scratch
-WORKDIR /root/
-COPY --from=builder /go/src/github.com/mrichman/hargo/app .
+
+WORKDIR /
+ENV PATH=/
+
+COPY --from=builder /go/src/hargo/hargo /
 
 # Metadata params
 ARG VERSION
@@ -33,4 +46,4 @@ LABEL org.label-schema.build-date=$BUILD_DATE \
       org.label-schema.docker.schema-version="1.0" \
       org.label-schema.docker.cmd="docker run --rm hargo"
 
-CMD ["./app"]
+CMD ["./hargo"] 
