@@ -4,6 +4,9 @@ target
 cmd/hargo/hargo-fetch-2*/*
 hargo-fetch*/*
 
+# Chronograf db
+chronograf-v1.db
+
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.o
 *.a
