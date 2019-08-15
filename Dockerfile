@@ -1,7 +1,7 @@
 # This is a multi-stage build.
 
 # build stage
-FROM golang:1.11-alpine3.10 AS builder
+FROM golang:1.12-alpine3.10 AS builder
 WORKDIR /go/src/hargo
 COPY . /go/src/hargo
 
@@ -46,4 +46,4 @@ LABEL org.label-schema.build-date=$BUILD_DATE \
       org.label-schema.docker.schema-version="1.0" \
       org.label-schema.docker.cmd="docker run --rm hargo"
 
-CMD ["./hargo"] 
+CMD ["./hargo"]
