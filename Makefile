@@ -56,6 +56,9 @@ clean:
 docker:
 	docker build --rm -t ${IMAGE} --build-arg VERSION="${VERSION}" \
 	--build-arg BUILD_DATE="${BUILD_DATE}" \
+	--build-arg DATE="${DATE}" \
+	--build-arg HASH="${HASH}" \
+	--build-arg VERSION="${VERSION}" \
 	--build-arg VCS_URL="${VCS_URL}" \
 	--build-arg VCS_REF="${VCS_REF}" \
 	--build-arg NAME="${NAME}" \
