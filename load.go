@@ -2,6 +2,7 @@ package hargo
 
 import (
 	"bufio"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -18,7 +19,7 @@ var useInfluxDB = true // just in case we can't connect, run tests without recor
 
 // LoadTest executes all HTTP requests in order concurrently
 // for a given number of workers.
-func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duration, u url.URL, ignoreHarCookies bool) error {
+func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duration, u url.URL, ignoreHarCookies bool, insecureSkipVerify bool) error {
 
 	c, err := NewInfluxDBClient(u)
 
@@ -39,7 +40,7 @@ func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duratio
 
 	for i := 0; i < workers; i++ {
 		wg.Add(workers)
-		go processEntries(harfile, &har, &wg, i, c, ignoreHarCookies)
+		go processEntries(harfile, &har, &wg, i, c, ignoreHarCookies, insecureSkipVerify)
 	}
 
 	if waitTimeout(&wg, timeout) {
@@ -51,7 +52,7 @@ func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duratio
 	return nil
 }
 
-func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c client.Client, ignoreHarCookies bool) {
+func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c client.Client, ignoreHarCookies bool, insecureSkipVerify bool) {
 	defer wg.Done()
 
 	iter := 0
@@ -68,6 +69,7 @@ func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c cli
 					Timeout:   30 * time.Second,
 					KeepAlive: 30 * time.Second,
 				}).Dial,
+				TLSClientConfig:       &tls.Config{InsecureSkipVerify: insecureSkipVerify},
 				TLSHandshakeTimeout:   10 * time.Second,
 				ResponseHeaderTimeout: 10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,

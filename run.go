@@ -2,13 +2,14 @@ package hargo
 
 import (
 	"bufio"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
 )
 
 // Run executes all entries in .har file
-func Run(r *bufio.Reader, ignoreHarCookies bool) error {
+func Run(r *bufio.Reader, ignoreHarCookies bool, insecureSkipVerify bool) error {
 
 	har, err := Decode(r)
 
@@ -22,6 +23,9 @@ func Run(r *bufio.Reader, ignoreHarCookies bool) error {
 			return nil
 		},
 		Jar: jar,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: insecureSkipVerify},
+		},
 	}
 
 	for _, entry := range har.Log.Entries {
