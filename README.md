@@ -133,11 +133,12 @@ The example docker-compose file will start three containers:
 - influxdb
 - grafana
 
-The hargo container will first needs to be [build](#build-container). When the compose file is run it will start a hargo load process that will writes the results into the influxdb. This influxdb can be viewed with the [grafana container](http://localhost:3000) that contains a example dashboard showing the latency of the executed request. Username and password for all the containers is hargo/hargo.
+The hargo container will first needs to be built. See [build](#build-container). When the compose file is run it will start a hargo load process that will write the results to InfluxDB. This InfluxDB instance can be viewed using the [grafana container](http://localhost:3000). This contains an example dashboard showing the latency of the executed request. Username/password for all the containers is hargo/hargo.
 
 ### commands
 
 ```docker-compose
+cd example/docker-compose
 docker-compose up
 docker-compose down -v
 ```
