@@ -1,0 +1,11 @@
+apiVersion: 1
+datasources:
+  - name: Hargo
+    type: influxdb
+    access: proxy
+    database: hargo
+    user: hargo
+    password: hargo
+    url: http://influxdb:8086
+    isDefault: true
+    editable: true

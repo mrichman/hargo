@@ -1,0 +1,27 @@
+version: '3'
+services:
+  influxdb:
+    image: influxdb:latest
+    ports:
+      - '8086:8086'
+    volumes:
+      - influxdb:/var/lib/influxdb
+    environment:
+      - INFLUXDB_DB=hargo
+      - INFLUXDB_ADMIN_USER=hargo
+      - INFLUXDB_ADMIN_PASSWORD=hargo
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - '3000:3000'
+    volumes:
+      - grafana:/var/lib/grafana
+      - ./grafana/provisioning/:/etc/grafana/provisioning
+    depends_on:
+      - influxdb
+    environment:
+      - GF_SECURITY_ADMIN_USER=hargo
+      - GF_SECURITY_ADMIN_PASSWORD=hargo
+volumes:
+  grafana: 
+  influxdb:
