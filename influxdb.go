@@ -27,6 +27,19 @@ func NewInfluxDBClient(u url.URL) (client.Client, error) {
 		return c, err
 	}
 
+	retry := 1
+
+	for retry < 3 {
+		_, resp, e := c.Ping(2 * time.Second)
+		if e != nil {
+			retry++
+			time.Sleep(10 * time.Second)
+		} else if len(resp) > 0 {
+			log.Println("Version InfluxDB: " + resp)
+			break
+		}
+	}
+
 	db = strings.Replace(u.Path, "/", "", -1)
 
 	log.Info("DB: ", db)
