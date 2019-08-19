@@ -113,7 +113,7 @@ Hargo will also save its results to [InfluxDB](https://www.influxdata.com/), if 
 
 ## Docker
 
-### [Build container](#build)
+### Build container
 
 ```docker
 docker build -t hargo .
@@ -133,9 +133,9 @@ The example docker-compose file will start three containers:
 - influxdb
 - grafana
 
-The hargo container will first needs to be [build](#build). When the compose file is run it will start a hargo load process that will writes the results into the influxdb. This influxdb can be view with the grafana container that contains a example dashboard show the latency.
+The hargo container will first needs to be [build](#build-container). When the compose file is run it will start a hargo load process that will writes the results into the influxdb. This influxdb can be view with the grafana container that contains a example dashboard show the latency.
 
-### start
+### commands
 
 ```docker-compose
 docker-compose up
