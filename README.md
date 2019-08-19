@@ -124,3 +124,20 @@ docker build -t hargo .
 ```docker
 docker run --rm -v `pwd`/test:/test hargo hargo run /test/golang.org.har
 ```
+
+## Docker-compose
+
+The example docker-compose file will start three containers:
+
+- hargo
+- influxdb
+- grafana
+
+The hargo container will first needs to be [build](#build-container). When the compose file is run it will start a hargo load process that will writes the results into the influxdb. This influxdb can be viewed with the [grafana container](http://localhost:3000) that contains a example dashboard showing the latency of the executed request. Username and password for all the containers is hargo/hargo.
+
+### commands
+
+```docker-compose
+docker-compose up
+docker-compose down -v
+```

@@ -114,15 +114,19 @@ func main() {
 				cli.BoolFlag{
 					Name:  "ignore-har-cookies",
 					Usage: "Ignore the cookies provided by the HAR entries"},
+				cli.BoolFlag{
+					Name:  "insecure-skip-verify",
+					Usage: "Skips the TLS security checks"},
 			},
 			Action: func(c *cli.Context) {
 				ignoreHarCookies := c.Bool("ignore-har-cookies")
+				insecureSkipVerify := c.Bool("insecure-skip-verify")
 				harFile := c.Args().First()
 				log.Info("run .har file: ", harFile)
 				file, err := os.Open(harFile)
 				if err == nil {
 					r := newReader(file)
-					hargo.Run(r, ignoreHarCookies)
+					hargo.Run(r, ignoreHarCookies, insecureSkipVerify)
 				} else {
 					log.Fatal("Cannot open file: ", harFile)
 					os.Exit(-1)
@@ -192,6 +196,9 @@ func main() {
 				cli.BoolFlag{
 					Name:  "ignore-har-cookies",
 					Usage: "Ignore the cookies provided by the HAR entries"},
+				cli.BoolFlag{
+					Name:  "insecure-skip-verify",
+					Usage: "Skips the TLS security checks"},
 			},
 			Action: func(c *cli.Context) {
 
@@ -215,13 +222,14 @@ func main() {
 					duration := c.Int("d")
 					u, err := url.Parse(c.String("u"))
 					ignoreHarCookies := c.Bool("ignore-har-cookies")
+					insecureSkipVerify := c.Bool("insecure-skip-verify")
 
 					if err != nil {
 						log.Fatal("Invalid InfluxDB URL: ", c.String("u"))
 						os.Exit(-1)
 					}
 
-					hargo.LoadTest(filepath.Base(harFile), r, workers, time.Duration(duration)*time.Second, *u, ignoreHarCookies)
+					hargo.LoadTest(filepath.Base(harFile), r, workers, time.Duration(duration)*time.Second, *u, ignoreHarCookies, insecureSkipVerify)
 				} else {
 					log.Fatal("Cannot open file: ", harFile)
 					os.Exit(-1)
