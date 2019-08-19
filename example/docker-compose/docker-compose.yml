@@ -1,5 +1,12 @@
 version: '3'
 services:
+  hargo:
+    image: hargo
+    command: hargo load -u=http://influxdb:8086/hargo -insecure-skip-verify=true /test/golang.org.har
+    volumes:
+      - ../../test:/test
+    depends_on:
+      - influxdb  
   influxdb:
     image: influxdb:latest
     ports:
