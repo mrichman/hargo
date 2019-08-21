@@ -16,6 +16,8 @@ RUN go mod download
 ENV CGO_ENABLED=0
 ENV GOOS=linux
 
+RUN apk add -U --no-cache ca-certificates
+
 RUN go build -ldflags "-s -w -X main.Version=$VERSION -X main.CommitHash=$HASH -X 'main.CompileDate=$DATE'" -o hargo ./cmd/hargo
 
 # final stage
@@ -24,6 +26,7 @@ FROM scratch
 WORKDIR /
 ENV PATH=/
 
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /go/src/hargo/hargo /
 
 # Metadata params
