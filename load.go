@@ -2,16 +2,10 @@ package hargo
 
 import (
 	"bufio"
-	"crypto/tls"
-	"fmt"
-	"net"
-	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"sync"
 	"time"
 
-	client "github.com/influxdata/influxdb1-client/v2"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -20,126 +14,119 @@ var useInfluxDB = true // just in case we can't connect, run tests without recor
 // LoadTest executes all HTTP requests in order concurrently
 // for a given number of workers.
 func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duration, u url.URL, ignoreHarCookies bool, insecureSkipVerify bool) error {
+	log.Infof("Starting load test with %d workers. Duration %v.", workers, timeout)
 
-	c, err := NewInfluxDBClient(u)
+	results := make(chan TestResult)
+	defer close(results)
 
-	if err != nil {
-		useInfluxDB = false
-		log.Warn("No test results will be recorded to InfluxDB")
-	} else {
-		log.Info("Recording results to InfluxDB: ", u.String())
-	}
-
-	har, err := Decode(r)
-
-	check(err)
+	entries := make(chan Entry)
+	defer close(entries)
 
 	var wg sync.WaitGroup
 
-	log.Infof("Starting load test with %d workers. Duration %v.", workers, timeout)
+	wg.Add(1)
+	go readHARStream(r, entries, &wg)
 
-	for i := 0; i < workers; i++ {
-		wg.Add(workers)
-		go processEntries(harfile, &har, &wg, i, c, ignoreHarCookies, insecureSkipVerify)
+loop:
+	for {
+		select {
+		case <-time.After(timeout):
+			log.Infoln("break")
+			break loop
+		default:
+			for {
+				entry, more := <-entries
+				if !more {
+					break loop
+				}
+				wg.Add(1)
+				go processEntries(harfile, entry, &wg, ignoreHarCookies, insecureSkipVerify, results)
+			}
+		}
 	}
+	log.Infoln("out of break")
+	wg.Wait()
+	return nil // timed out
 
-	if waitTimeout(&wg, timeout) {
-		fmt.Printf("\nTimeout of %.1fs elapsed. Terminating load test.\n", timeout.Seconds())
-	} else {
-		fmt.Println("Wait group finished")
-	}
-
-	return nil
 }
 
-func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c client.Client, ignoreHarCookies bool, insecureSkipVerify bool) {
+func processEntries(harfile string, entry Entry, wg *sync.WaitGroup, ignoreHarCookies bool, insecureSkipVerify bool, results chan TestResult) {
 	defer wg.Done()
 
-	iter := 0
+	// log.Infoln(entry)
+	// jar, _ := cookiejar.New(nil)
 
-	for {
+	// httpClient := http.Client{
+	// 	Transport: &http.Transport{
+	// 		Dial: (&net.Dialer{
+	// 			Timeout:   1 * time.Second,
+	// 			KeepAlive: 1 * time.Second,
+	// 		}).Dial,
+	// 		TLSClientConfig:       &tls.Config{InsecureSkipVerify: insecureSkipVerify},
+	// 		TLSHandshakeTimeout:   1 * time.Second,
+	// 		ResponseHeaderTimeout: 1 * time.Second,
+	// 		ExpectContinueTimeout: 1 * time.Second,
+	// 	},
+	// 	CheckRedirect: func(r *http.Request, via []*http.Request) error {
+	// 		r.URL.Opaque = r.URL.Path
+	// 		return nil
+	// 	},
+	// 	Jar: jar,
+	// }
 
-		testResults := make([]TestResult, 0) // batch results
+	// iter := 0
 
-		jar, _ := cookiejar.New(nil)
+	// msg := fmt.Sprintf("[%d,%d] %s", 1, iter, entry.Request.URL)
 
-		httpClient := http.Client{
-			Transport: &http.Transport{
-				Dial: (&net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}).Dial,
-				TLSClientConfig:       &tls.Config{InsecureSkipVerify: insecureSkipVerify},
-				TLSHandshakeTimeout:   10 * time.Second,
-				ResponseHeaderTimeout: 10 * time.Second,
-				ExpectContinueTimeout: 1 * time.Second,
-			},
-			CheckRedirect: func(r *http.Request, via []*http.Request) error {
-				r.URL.Opaque = r.URL.Path
-				return nil
-			},
-			Jar: jar,
-		}
+	// req, err := EntryToRequest(&entry, ignoreHarCookies)
 
-		for _, entry := range har.Log.Entries {
+	// check(err)
 
-			msg := fmt.Sprintf("[%d,%d] %s", wid, iter, entry.Request.URL)
+	// jar.SetCookies(req.URL, req.Cookies())
 
-			req, err := EntryToRequest(&entry, ignoreHarCookies)
+	// startTime := time.Now()
+	// resp, err := httpClient.Do(req)
+	// endTime := time.Now()
+	// latency := int(endTime.Sub(startTime) / time.Millisecond)
+	// method := req.Method
 
-			check(err)
+	// if err != nil {
 
-			jar.SetCookies(req.URL, req.Cookies())
+	// 	log.Error(err)
+	// 	log.Error(entry)
+	// 	tr := TestResult{
+	// 		URL:       req.URL.String(),
+	// 		Status:    0,
+	// 		StartTime: startTime,
+	// 		EndTime:   endTime,
+	// 		Latency:   latency,
+	// 		Method:    method,
+	// 		HarFile:   harfile}
 
-			startTime := time.Now()
-			resp, err := httpClient.Do(req)
-			endTime := time.Now()
-			latency := int(endTime.Sub(startTime) / time.Millisecond)
-			method := req.Method
+	// 	results <- tr
+	// 	return
+	// }
 
-			if err != nil {
-				log.Error(err)
-				tr := TestResult{
-					URL:       req.URL.String(),
-					Status:    0,
-					StartTime: startTime,
-					EndTime:   endTime,
-					Latency:   latency,
-					Method:    method,
-					HarFile:   harfile}
+	// if resp != nil {
+	// 	resp.Body.Close()
+	// }
 
-				testResults = append(testResults, tr)
+	// msg += fmt.Sprintf(" %d %dms", resp.StatusCode, latency)
 
-				continue
-			}
+	// log.Debug(msg)
 
-			if resp != nil {
-				resp.Body.Close()
-			}
+	// tr := TestResult{
+	// 	URL:       req.URL.String(),
+	// 	Status:    resp.StatusCode,
+	// 	StartTime: startTime,
+	// 	EndTime:   endTime,
+	// 	Latency:   latency,
+	// 	Method:    method,
+	// 	HarFile:   harfile}
+	// results <- tr
 
-			msg += fmt.Sprintf(" %d %dms", resp.StatusCode, latency)
-
-			log.Debug(msg)
-
-			tr := TestResult{
-				URL:       req.URL.String(),
-				Status:    resp.StatusCode,
-				StartTime: startTime,
-				EndTime:   endTime,
-				Latency:   latency,
-				Method:    method,
-				HarFile:   harfile}
-
-			testResults = append(testResults, tr)
-		}
-
-		if useInfluxDB {
-			log.Debug("Writing batch points to InfluxDB...")
-			go WritePoints(c, testResults)
-		}
-
-		iter++
-	}
+	// log.Infoln("DONE!?")
+	return
 }
 
 // waitTimeout waits for the waitgroup for the specified max timeout.
@@ -150,6 +137,7 @@ func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 		defer close(c)
 		wg.Wait()
 	}()
+
 	select {
 	case <-c:
 		return false // completed normally
