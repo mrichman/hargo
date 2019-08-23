@@ -12,7 +12,8 @@ import (
 
 func readHARStream(r *bufio.Reader, entries chan Entry, wg *sync.WaitGroup) {
 	defer wg.Done()
-	log.Infoln("readHARStream")
+
+	log.Infoln("reading HAR file")
 	decoder := json.NewDecoder(r)
 loop:
 	for {
@@ -41,7 +42,6 @@ loop:
 			log.Fatal(err)
 		}
 		if len(e.Request.URL) > 0 {
-			// log.Infoln(e.Request.URL)
 			entries <- e
 		}
 	}

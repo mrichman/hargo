@@ -16,43 +16,54 @@ var useInfluxDB = true // just in case we can't connect, run tests without recor
 func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duration, u url.URL, ignoreHarCookies bool, insecureSkipVerify bool) error {
 	log.Infof("Starting load test with %d workers. Duration %v.", workers, timeout)
 
-	results := make(chan TestResult)
-	defer close(results)
+	tr := make(chan TestResult)
+	defer close(tr)
 
-	entries := make(chan Entry)
-	defer close(entries)
+	e := make(chan Entry)
+	defer close(e)
+
+	t := make(chan bool)
+	defer close(t)
 
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go readHARStream(r, entries, &wg)
+	go readHARStream(r, e, &wg)
 
-loop:
-	for {
-		select {
-		case <-time.After(timeout):
-			log.Infoln("break")
-			break loop
-		default:
-			for {
-				entry, more := <-entries
-				if !more {
-					break loop
-				}
+	go wait(t, timeout)
+
+	go func() {
+		for {
+			select {
+			case <-t:
+				break
+			case entry := <-e:
 				wg.Add(1)
-				go processEntries(harfile, entry, &wg, ignoreHarCookies, insecureSkipVerify, results)
+				go processEntries(harfile, entry, &wg, ignoreHarCookies, insecureSkipVerify, tr)
 			}
 		}
-	}
-	log.Infoln("out of break")
-	wg.Wait()
-	return nil // timed out
+	}()
 
+	for {
+		select {
+		case <-t:
+			wg.Wait()
+			return nil
+		}
+	}
+}
+
+func wait(t chan bool, timeout time.Duration) {
+	time.Sleep(timeout)
+	// once for the timer and once for the enrty queue
+	t <- true
+	t <- true
 }
 
 func processEntries(harfile string, entry Entry, wg *sync.WaitGroup, ignoreHarCookies bool, insecureSkipVerify bool, results chan TestResult) {
 	defer wg.Done()
 
+	time.Sleep(1 * time.Second)
 	// log.Infoln(entry)
 	// jar, _ := cookiejar.New(nil)
 
@@ -127,21 +138,4 @@ func processEntries(harfile string, entry Entry, wg *sync.WaitGroup, ignoreHarCo
 
 	// log.Infoln("DONE!?")
 	return
-}
-
-// waitTimeout waits for the waitgroup for the specified max timeout.
-// Returns true if waiting timed out.
-func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
-	c := make(chan struct{})
-	go func() {
-		defer close(c)
-		wg.Wait()
-	}()
-
-	select {
-	case <-c:
-		return false // completed normally
-	case <-time.After(timeout):
-		return true // timed out
-	}
 }
