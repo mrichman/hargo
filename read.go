@@ -3,15 +3,13 @@ package hargo
 import (
 	"bufio"
 	"encoding/json"
-	"sync"
 
 	log "github.com/sirupsen/logrus"
 )
 
 //https://golang.org/pkg/encoding/json/#example_Decoder_Decode_stream
 
-func readHARStream(r *bufio.Reader, entries chan Entry, wg *sync.WaitGroup, stop chan bool) {
-	defer wg.Done()
+func readHARStream(r *bufio.Reader, entries chan Entry, stop chan bool) {
 
 	log.Infoln("reading HAR file")
 	decoder := json.NewDecoder(r)
@@ -38,7 +36,6 @@ loop:
 	}
 
 	// read entries
-read:
 	for decoder.More() {
 		var e Entry
 		err := decoder.Decode(&e)
@@ -52,10 +49,12 @@ read:
 		select {
 		default:
 			continue
-		case <-stop: // triggered when the stop channel is closed
+		case <-stop:
 			log.Infoln("stop reading HAR file")
-			break read // exit
+			close(entries)
+			return
 		}
 	}
 	log.Infoln("read HAR file")
+	return
 }
