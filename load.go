@@ -2,6 +2,7 @@ package hargo
 
 import (
 	"bufio"
+	"fmt"
 	"net/url"
 	"sync"
 	"time"
@@ -15,55 +16,96 @@ var useInfluxDB = true // just in case we can't connect, run tests without recor
 // for a given number of workers.
 func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duration, u url.URL, ignoreHarCookies bool, insecureSkipVerify bool) error {
 	log.Infof("Starting load test with %d workers. Duration %v.", workers, timeout)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	wg.Add(1)
+	wg.Add(1)
 
-	tr := make(chan TestResult)
-	defer close(tr)
+	// tr := make(chan TestResult)
+	// defer close(tr)
 
 	e := make(chan Entry)
 	defer close(e)
 
-	t := make(chan bool)
-	defer close(t)
+	stop := make(chan bool)
+	defer close(stop)
 
-	var wg sync.WaitGroup
+	go readHARStream(r, e, &wg, stop)
 
-	wg.Add(1)
-	go readHARStream(r, e, &wg)
+	go wait(stop, timeout, workers, &wg)
 
-	go wait(t, timeout)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go processEntries(harfile, e, &wg, ignoreHarCookies, insecureSkipVerify, stop)
+	}
 
-	go func() {
-		for {
-			select {
-			case <-t:
-				break
-			case entry := <-e:
-				wg.Add(1)
-				go processEntries(harfile, entry, &wg, ignoreHarCookies, insecureSkipVerify, tr)
-			}
-		}
-	}()
+	// go func(harfile string, e chan Entry, wg *sync.WaitGroup, ignoreHarCookies bool, insecureSkipVerify bool, results chan TestResult, workers int, done chan int, stop chan bool) {
 
+	// 	done <- 0
+	// 	defer wg.Done()
+	// 	j := 0
+	// loop:
+	// 	for {
+	// 		select {
+	// 		case <-stop:
+
+	// 			break loop
+	// 		case entry := <-e:
+	// 			for {
+	// 				i := <-done
+	// 				j = j + i
+	// 				if j < workers {
+	// 					done <- 1
+	// 					wg.Add(1)
+	// 					go processEntries(harfile, entry, wg, ignoreHarCookies, insecureSkipVerify, tr, done)
+	// 					break
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// 	log.Infoln("stop processing")
+	// }(harfile, e, &wg, ignoreHarCookies, insecureSkipVerify, tr, workers, done, stop)
+
+loop:
 	for {
 		select {
-		case <-t:
-			wg.Wait()
-			return nil
+		case <-stop:
+			log.Infoln("stop main")
+			break loop
 		}
+	}
+
+	defer wg.Wait()
+	fmt.Printf("\nTimeout of %.1fs elapsed. Terminating load test.\n", timeout.Seconds())
+	return nil
+}
+
+func wait(stop chan bool, timeout time.Duration, workers int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	time.Sleep(timeout)
+	log.Infoln("TIMEOUT")
+	// once for the timer and once for the entry queue
+	stop <- true
+	stop <- true
+	stop <- true
+	for i := 0; i < workers; i++ {
+		stop <- true
 	}
 }
 
-func wait(t chan bool, timeout time.Duration) {
-	time.Sleep(timeout)
-	// once for the timer and once for the enrty queue
-	t <- true
-	t <- true
-}
-
-func processEntries(harfile string, entry Entry, wg *sync.WaitGroup, ignoreHarCookies bool, insecureSkipVerify bool, results chan TestResult) {
+func processEntries(harfile string, e chan Entry, wg *sync.WaitGroup, ignoreHarCookies bool, insecureSkipVerify bool, stop chan bool) {
 	defer wg.Done()
+process:
+	for {
+		select {
+		case <-stop:
+			break process
+		case entry := <-e:
+			time.Sleep(1 * time.Second)
+			log.Infoln(entry.Request.URL)
+		}
+	}
 
-	time.Sleep(1 * time.Second)
 	// log.Infoln(entry)
 	// jar, _ := cookiejar.New(nil)
 
@@ -136,6 +178,4 @@ func processEntries(harfile string, entry Entry, wg *sync.WaitGroup, ignoreHarCo
 	// 	HarFile:   harfile}
 	// results <- tr
 
-	// log.Infoln("DONE!?")
-	return
 }

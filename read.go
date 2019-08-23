@@ -10,11 +10,13 @@ import (
 
 //https://golang.org/pkg/encoding/json/#example_Decoder_Decode_stream
 
-func readHARStream(r *bufio.Reader, entries chan Entry, wg *sync.WaitGroup) {
+func readHARStream(r *bufio.Reader, entries chan Entry, wg *sync.WaitGroup, stop chan bool) {
 	defer wg.Done()
 
 	log.Infoln("reading HAR file")
 	decoder := json.NewDecoder(r)
+
+	// navigate to entries
 loop:
 	for {
 		t, _ := decoder.Token()
@@ -35,6 +37,8 @@ loop:
 		log.Fatal(err)
 	}
 
+	// read entries
+read:
 	for decoder.More() {
 		var e Entry
 		err := decoder.Decode(&e)
@@ -44,7 +48,14 @@ loop:
 		if len(e.Request.URL) > 0 {
 			entries <- e
 		}
-	}
 
+		select {
+		default:
+			continue
+		case <-stop: // triggered when the stop channel is closed
+			log.Infoln("stop reading HAR file")
+			break read // exit
+		}
+	}
 	log.Infoln("read HAR file")
 }
