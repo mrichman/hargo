@@ -191,8 +191,7 @@ func main() {
 					Usage: "Test duration in seconds (default 60)"},
 				cli.StringFlag{
 					Name:  "influxurl, u",
-					Value: "http://localhost:8086/hargo",
-					Usage: "InfluxDB URL (default http://localhost:8086/hargo)"},
+					Usage: "InfluxDB URL"},
 				cli.BoolFlag{
 					Name:  "ignore-har-cookies",
 					Usage: "Ignore the cookies provided by the HAR entries"},

@@ -27,7 +27,15 @@ func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duratio
 
 	go readHARStream(r, entries, stop)
 
-	go WritePoint(u, results)
+	if (url.URL{}) != u {
+		go WritePoint(u, results)
+	} else {
+		go func(results chan TestResult) {
+			for {
+				<-results
+			}
+		}(results)
+	}
 
 	go wait(stop, timeout, workers)
 
