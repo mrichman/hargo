@@ -23,8 +23,10 @@ func LoadTest(harfile string, file *os.File, workers int, timeout time.Duration,
 	stop := make(chan bool)
 	entries := make(chan Entry)
 
-	go readHARStream(file, entries, stop)
+	go ReadStream(file, entries, stop)
 
+	// if a InfluxDB URL is given the metrics will be written to that instance
+	// if not the dummy consumer is initiated.
 	if (url.URL{}) != u {
 		go WritePoint(u, results)
 	} else {
@@ -44,7 +46,6 @@ func LoadTest(harfile string, file *os.File, workers int, timeout time.Duration,
 	for {
 		select {
 		case <-stop:
-			log.Infoln("stop main")
 		}
 		break
 	}
@@ -52,9 +53,9 @@ func LoadTest(harfile string, file *os.File, workers int, timeout time.Duration,
 	return nil
 }
 
+// wait will close the stop chan when the timeout is hit.
 func wait(stop chan bool, timeout time.Duration, workers int) {
 	time.Sleep(timeout)
-	log.Infoln("TIMEOUT")
 	close(stop)
 }
 

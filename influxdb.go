@@ -12,8 +12,8 @@ import (
 
 var db string
 
-// NewInfluxDBClient returns a new InfluxDB client
-func NewInfluxDBClient(u url.URL) (client.Client, error) {
+// newInfluxDBClient returns a new InfluxDB client
+func newInfluxDBClient(u url.URL) (client.Client, error) {
 
 	addr := fmt.Sprintf("%s://%s:%s", u.Scheme, u.Hostname(), u.Port())
 	log.Print("Connecting to InfluxDB: ", addr)
@@ -56,10 +56,9 @@ func NewInfluxDBClient(u url.URL) (client.Client, error) {
 	return c, nil
 }
 
-// WritePoint is WritePoint
+// WritePoint inserts data to InfluxDB
 func WritePoint(u url.URL, results chan TestResult) {
-
-	c, err := NewInfluxDBClient(u)
+	c, err := newInfluxDBClient(u)
 
 	if err != nil {
 		log.Warn("No test results will be recorded to InfluxDB")

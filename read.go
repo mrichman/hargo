@@ -8,10 +8,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-//https://golang.org/pkg/encoding/json/#example_Decoder_Decode_stream
-
-func readHARStream(file *os.File, entries chan Entry, stop chan bool) {
-
+// ReadStream reads the har file as a stream and puts the entries
+// on a chan for consumption. When the end of a file is reached it
+// will start over until the stop signal is given.
+// https://golang.org/pkg/encoding/json/#example_Decoder_Decode_stream
+func ReadStream(file *os.File, entries chan Entry, stop chan bool) {
 	for {
 		r := NewReader(file)
 
