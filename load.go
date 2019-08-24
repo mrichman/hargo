@@ -1,23 +1,21 @@
 package hargo
 
 import (
-	"bufio"
 	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
-var useInfluxDB = true // just in case we can't connect, run tests without recording results
-
 // LoadTest executes all HTTP requests in order concurrently
 // for a given number of workers.
-func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duration, u url.URL, ignoreHarCookies bool, insecureSkipVerify bool) error {
+func LoadTest(harfile string, file *os.File, workers int, timeout time.Duration, u url.URL, ignoreHarCookies bool, insecureSkipVerify bool) error {
 	log.Infof("Starting load test with %d workers. Duration %v.", workers, timeout)
 
 	results := make(chan TestResult)
@@ -25,7 +23,7 @@ func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duratio
 	stop := make(chan bool)
 	entries := make(chan Entry)
 
-	go readHARStream(r, entries, stop)
+	go readHARStream(file, entries, stop)
 
 	if (url.URL{}) != u {
 		go WritePoint(u, results)

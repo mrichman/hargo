@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -69,7 +67,7 @@ func main() {
 				log.Infof("fetch .har file: %s", harFile)
 				file, err := os.Open(harFile)
 				if err == nil {
-					r := newReader(file)
+					r := hargo.NewReader(file)
 					hargo.Fetch(r)
 				} else {
 					log.Fatal("Cannot open file: ", harFile)
@@ -89,7 +87,7 @@ func main() {
 				log.Infof("curl .har file: %s", harFile)
 				file, err := os.Open(harFile)
 				if err == nil {
-					r := newReader(file)
+					r := hargo.NewReader(file)
 					cmd, err := hargo.ToCurl(r)
 
 					if err != nil {
@@ -125,7 +123,7 @@ func main() {
 				log.Info("run .har file: ", harFile)
 				file, err := os.Open(harFile)
 				if err == nil {
-					r := newReader(file)
+					r := hargo.NewReader(file)
 					hargo.Run(r, ignoreHarCookies, insecureSkipVerify)
 				} else {
 					log.Fatal("Cannot open file: ", harFile)
@@ -145,7 +143,7 @@ func main() {
 				log.Info("validate .har file: ", harFile)
 				file, err := os.Open(harFile)
 				if err == nil {
-					r := newReader(file)
+					r := hargo.NewReader(file)
 					hargo.Validate(r)
 				} else {
 					log.Fatal("Cannot open file: ", harFile)
@@ -165,7 +163,7 @@ func main() {
 				log.Info("dump .har file: ", harFile)
 				file, err := os.Open(harFile)
 				if err == nil {
-					r := newReader(file)
+					r := hargo.NewReader(file)
 					hargo.Dump(r)
 				} else {
 					log.Fatal("Cannot open file: ", harFile)
@@ -216,7 +214,6 @@ func main() {
 				log.Info("load test .har file: ", harFile)
 				file, err := os.Open(harFile)
 				if err == nil {
-					r := newReader(file)
 					workers := c.Int("w")
 					duration := c.Int("d")
 					u, err := url.Parse(c.String("u"))
@@ -228,7 +225,7 @@ func main() {
 						os.Exit(-1)
 					}
 
-					hargo.LoadTest(filepath.Base(harFile), r, workers, time.Duration(duration)*time.Second, *u, ignoreHarCookies, insecureSkipVerify)
+					hargo.LoadTest(filepath.Base(harFile), file, workers, time.Duration(duration)*time.Second, *u, ignoreHarCookies, insecureSkipVerify)
 				} else {
 					log.Fatal("Cannot open file: ", harFile)
 					os.Exit(-1)
@@ -238,22 +235,4 @@ func main() {
 	}
 
 	app.Run(os.Args)
-}
-
-// newReader returns a bufio.Reader that will skip over initial UTF-8 byte order marks.
-// https://tools.ietf.org/html/rfc7159#section-8.1
-func newReader(r io.Reader) *bufio.Reader {
-
-	buf := bufio.NewReader(r)
-	b, err := buf.Peek(3)
-	if err != nil {
-		// not enough bytes
-		return buf
-	}
-	if b[0] == 0xef && b[1] == 0xbb && b[2] == 0xbf {
-		log.Warn("BOM detected. Skipping first 3 bytes of file. Consider removing the BOM from this file. " +
-			"See https://tools.ietf.org/html/rfc7159#section-8.1 for details.")
-		buf.Discard(3)
-	}
-	return buf
 }

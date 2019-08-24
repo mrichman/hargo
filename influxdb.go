@@ -62,7 +62,6 @@ func WritePoint(u url.URL, results chan TestResult) {
 	c, err := NewInfluxDBClient(u)
 
 	if err != nil {
-		useInfluxDB = false
 		log.Warn("No test results will be recorded to InfluxDB")
 	} else {
 		log.Info("Recording results to InfluxDB: ", u.String())
