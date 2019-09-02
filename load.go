@@ -21,7 +21,7 @@ func LoadTest(harfile string, file *os.File, workers int, timeout time.Duration,
 	results := make(chan TestResult)
 	defer close(results)
 	stop := make(chan bool)
-	entries := make(chan Entry)
+	entries := make(chan Entry, workers)
 
 	go ReadStream(file, entries, stop)
 
@@ -40,7 +40,7 @@ func LoadTest(harfile string, file *os.File, workers int, timeout time.Duration,
 	go wait(stop, timeout, workers)
 
 	for i := 0; i < workers; i++ {
-		go processEntries(harfile, entries, results, ignoreHarCookies, insecureSkipVerify, stop)
+		go processEntries(harfile, i, entries, results, ignoreHarCookies, insecureSkipVerify, stop)
 	}
 
 	for {
@@ -59,7 +59,7 @@ func wait(stop chan bool, timeout time.Duration, workers int) {
 	close(stop)
 }
 
-func processEntries(harfile string, entries chan Entry, results chan TestResult, ignoreHarCookies bool, insecureSkipVerify bool, stop chan bool) {
+func processEntries(harfile string, worker int, entries chan Entry, results chan TestResult, ignoreHarCookies bool, insecureSkipVerify bool, stop chan bool) {
 	jar, _ := cookiejar.New(nil)
 
 	httpClient := http.Client{
@@ -86,7 +86,7 @@ func processEntries(harfile string, entries chan Entry, results chan TestResult,
 		case <-stop:
 			break
 		case entry := <-entries:
-			msg := fmt.Sprintf("[%d,%d] %s", 1, iter, entry.Request.URL)
+			msg := fmt.Sprintf("[%d,%d] %s", worker, iter, entry.Request.URL)
 
 			req, err := EntryToRequest(&entry, ignoreHarCookies)
 
