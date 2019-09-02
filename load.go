@@ -1,89 +1,92 @@
 package hargo
 
 import (
-	"bufio"
 	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"sync"
+	"os"
 	"time"
 
-	client "github.com/influxdata/influxdb1-client/v2"
 	log "github.com/sirupsen/logrus"
 )
 
-var useInfluxDB = true // just in case we can't connect, run tests without recording results
-
 // LoadTest executes all HTTP requests in order concurrently
 // for a given number of workers.
-func LoadTest(harfile string, r *bufio.Reader, workers int, timeout time.Duration, u url.URL, ignoreHarCookies bool, insecureSkipVerify bool) error {
-
-	c, err := NewInfluxDBClient(u)
-
-	if err != nil {
-		useInfluxDB = false
-		log.Warn("No test results will be recorded to InfluxDB")
-	} else {
-		log.Info("Recording results to InfluxDB: ", u.String())
-	}
-
-	har, err := Decode(r)
-
-	check(err)
-
-	var wg sync.WaitGroup
-
+func LoadTest(harfile string, file *os.File, workers int, timeout time.Duration, u url.URL, ignoreHarCookies bool, insecureSkipVerify bool) error {
 	log.Infof("Starting load test with %d workers. Duration %v.", workers, timeout)
 
-	for i := 0; i < workers; i++ {
-		wg.Add(workers)
-		go processEntries(harfile, &har, &wg, i, c, ignoreHarCookies, insecureSkipVerify)
-	}
+	results := make(chan TestResult)
+	defer close(results)
+	stop := make(chan bool)
+	entries := make(chan Entry, workers)
 
-	if waitTimeout(&wg, timeout) {
-		fmt.Printf("\nTimeout of %.1fs elapsed. Terminating load test.\n", timeout.Seconds())
+	go ReadStream(file, entries, stop)
+
+	// if a InfluxDB URL is given the metrics will be written to that instance
+	// if not the dummy consumer is initiated.
+	if (url.URL{}) != u {
+		go WritePoint(u, results)
 	} else {
-		fmt.Println("Wait group finished")
+		go func(results chan TestResult) {
+			for {
+				<-results
+			}
+		}(results)
 	}
 
+	go wait(stop, timeout, workers)
+
+	for i := 0; i < workers; i++ {
+		go processEntries(harfile, i, entries, results, ignoreHarCookies, insecureSkipVerify, stop)
+	}
+
+	for {
+		select {
+		case <-stop:
+		}
+		break
+	}
+	fmt.Printf("\nTimeout of %.1fs elapsed. Terminating load test.\n", timeout.Seconds())
 	return nil
 }
 
-func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c client.Client, ignoreHarCookies bool, insecureSkipVerify bool) {
-	defer wg.Done()
+// wait will close the stop chan when the timeout is hit.
+func wait(stop chan bool, timeout time.Duration, workers int) {
+	time.Sleep(timeout)
+	close(stop)
+}
 
+func processEntries(harfile string, worker int, entries chan Entry, results chan TestResult, ignoreHarCookies bool, insecureSkipVerify bool, stop chan bool) {
+	jar, _ := cookiejar.New(nil)
+
+	httpClient := http.Client{
+		Transport: &http.Transport{
+			Dial: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).Dial,
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: insecureSkipVerify},
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		CheckRedirect: func(r *http.Request, via []*http.Request) error {
+			r.URL.Opaque = r.URL.Path
+			return nil
+		},
+		Jar: jar,
+	}
 	iter := 0
-
 	for {
 
-		testResults := make([]TestResult, 0) // batch results
-
-		jar, _ := cookiejar.New(nil)
-
-		httpClient := http.Client{
-			Transport: &http.Transport{
-				Dial: (&net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}).Dial,
-				TLSClientConfig:       &tls.Config{InsecureSkipVerify: insecureSkipVerify},
-				TLSHandshakeTimeout:   10 * time.Second,
-				ResponseHeaderTimeout: 10 * time.Second,
-				ExpectContinueTimeout: 1 * time.Second,
-			},
-			CheckRedirect: func(r *http.Request, via []*http.Request) error {
-				r.URL.Opaque = r.URL.Path
-				return nil
-			},
-			Jar: jar,
-		}
-
-		for _, entry := range har.Log.Entries {
-
-			msg := fmt.Sprintf("[%d,%d] %s", wid, iter, entry.Request.URL)
+		select {
+		case <-stop:
+			break
+		case entry := <-entries:
+			msg := fmt.Sprintf("[%d,%d] %s", worker, iter, entry.Request.URL)
 
 			req, err := EntryToRequest(&entry, ignoreHarCookies)
 
@@ -98,7 +101,9 @@ func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c cli
 			method := req.Method
 
 			if err != nil {
+
 				log.Error(err)
+				log.Error(entry)
 				tr := TestResult{
 					URL:       req.URL.String(),
 					Status:    0,
@@ -107,9 +112,7 @@ func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c cli
 					Latency:   latency,
 					Method:    method,
 					HarFile:   harfile}
-
-				testResults = append(testResults, tr)
-
+				results <- tr
 				continue
 			}
 
@@ -119,7 +122,7 @@ func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c cli
 
 			msg += fmt.Sprintf(" %d %dms", resp.StatusCode, latency)
 
-			log.Debug(msg)
+			log.Infoln(msg)
 
 			tr := TestResult{
 				URL:       req.URL.String(),
@@ -130,30 +133,8 @@ func processEntries(harfile string, har *Har, wg *sync.WaitGroup, wid int, c cli
 				Method:    method,
 				HarFile:   harfile}
 
-			testResults = append(testResults, tr)
+			results <- tr
 		}
-
-		if useInfluxDB {
-			log.Debug("Writing batch points to InfluxDB...")
-			go WritePoints(c, testResults)
-		}
-
 		iter++
-	}
-}
-
-// waitTimeout waits for the waitgroup for the specified max timeout.
-// Returns true if waiting timed out.
-func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
-	c := make(chan struct{})
-	go func() {
-		defer close(c)
-		wg.Wait()
-	}()
-	select {
-	case <-c:
-		return false // completed normally
-	case <-time.After(timeout):
-		return true // timed out
 	}
 }
