@@ -12,8 +12,8 @@ import (
 
 var db string
 
-// NewInfluxDBClient returns a new InfluxDB client
-func NewInfluxDBClient(u url.URL) (client.Client, error) {
+// newInfluxDBClient returns a new InfluxDB client
+func newInfluxDBClient(u url.URL) (client.Client, error) {
 
 	addr := fmt.Sprintf("%s://%s:%s", u.Scheme, u.Hostname(), u.Port())
 	log.Print("Connecting to InfluxDB: ", addr)
@@ -56,31 +56,32 @@ func NewInfluxDBClient(u url.URL) (client.Client, error) {
 	return c, nil
 }
 
-// WritePoints inserts data to InfluxDB
-func WritePoints(c client.Client, tr []TestResult) error {
-
-	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
-		Database:  db,
-		Precision: "us",
-	})
+// WritePoint inserts data to InfluxDB
+func WritePoint(u url.URL, results chan TestResult) {
+	c, err := newInfluxDBClient(u)
 
 	if err != nil {
-		log.Fatalln("Error: ", err)
+		log.Warn("No test results will be recorded to InfluxDB")
+	} else {
+		log.Info("Recording results to InfluxDB: ", u.String())
 	}
 
-	//spew.Dump("BatchPoint:", bp)
+	for {
+		result := <-results
 
-	for i := 0; i < len(tr); i++ {
-		// Create a point and add to batch
-		//tags := map[string]string{"test": "test-results"}
+		bp, err := client.NewBatchPoints(client.BatchPointsConfig{
+			Database:  db,
+			Precision: "us",
+		})
+
 		fields := map[string]interface{}{
-			"URL":       tr[i].URL,
-			"Status":    tr[i].Status,
-			"StartTime": tr[i].StartTime,
-			"EndTime":   tr[i].EndTime,
-			"Latency":   tr[i].Latency,
-			"Method":    tr[i].Method,
-			"HarFile":   tr[i].HarFile}
+			"URL":       result.URL,
+			"Status":    result.Status,
+			"StartTime": result.StartTime,
+			"EndTime":   result.EndTime,
+			"Latency":   result.Latency,
+			"Method":    result.Method,
+			"HarFile":   result.HarFile}
 
 		pt, err := client.NewPoint("test_result", nil, fields, time.Now())
 
@@ -89,16 +90,13 @@ func WritePoints(c client.Client, tr []TestResult) error {
 		}
 
 		bp.AddPoint(pt)
+
+		err = c.Write(bp)
+
+		if err != nil {
+			log.Fatalln("Error: ", err)
+		}
 	}
-
-	// Write the batch
-	err = c.Write(bp)
-
-	if err != nil {
-		log.Fatalln("Error: ", err)
-	}
-
-	return nil
 }
 
 // queryDB convenience function to query the database
