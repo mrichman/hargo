@@ -31,7 +31,8 @@ clean:
 	rm -f hargo
 
 docker:
-	docker build --rm -t ${IMAGE} --build-arg VERSION="${VERSION}" \
+	docker build --rm -t ${IMAGE} \
+	--build-arg VERSION="${VERSION}" \
 	--build-arg BUILD_DATE="${BUILD_DATE}" \
 	--build-arg DATE="${DATE}" \
 	--build-arg HASH="${HASH}" \
