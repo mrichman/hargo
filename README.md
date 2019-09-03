@@ -15,7 +15,7 @@ USAGE:
    hargo <command> [arguments] <.har file>
 
 VERSION:
-   0.1.2-dev.16 (28c9ef4)
+   0.1.2-dev.57 (da53069)
 
 AUTHOR:
    Mark A. Richman <mark@markrichman.com>
