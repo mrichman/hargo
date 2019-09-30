@@ -9,5 +9,3 @@ require (
 	github.com/urfave/cli v1.21.0
 	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297
 )
-
-go 1.13
