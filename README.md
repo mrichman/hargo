@@ -42,6 +42,7 @@ COPYRIGHT:
 
 ```text
 go get github.com/mrichman/hargo
+export GOPATH=$HOME/go
 cd $GOPATH/src/github.com/mrichman/hargo
 go run cmd/hargo/hargo.go validate test/golang.org.har
 ```
