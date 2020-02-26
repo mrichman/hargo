@@ -1,7 +1,7 @@
 # This is a multi-stage build.
 
 # build stage
-FROM golang:1.13-alpine3.10 AS builder
+FROM golang:1.14-alpine3.11 AS builder
 WORKDIR /go/src/hargo
 COPY . /go/src/hargo
 

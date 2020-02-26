@@ -10,22 +10,23 @@ HASH = $(shell git rev-parse --short HEAD)
 DATE = $(shell go run tools/build-date.go)
 GOMINORVERSION = $(shell go version | cut -d ' ' -f 3 | cut -d '.' -f 2)
 GOBIN ?= $($GOPATH)/bin
+GO = $(which go)
 
 # Builds hargo
 build:
-	go build -ldflags "-s -w -X main.Version=$(VERSION) -X main.CommitHash=$(HASH) -X 'main.CompileDate=$(DATE)'" -o hargo ./cmd/hargo
+	$(GO) build -ldflags "-s -w -X main.Version=$(VERSION) -X main.CommitHash=$(HASH) -X 'main.CompileDate=$(DATE)'" -o hargo ./cmd/hargo
 
 # Same as 'build' but installs to $GOBIN afterward
 install:
-	go install -ldflags "-s -w -X main.Version=$(VERSION) -X main.CommitHash=$(HASH) -X 'main.CompileDate=$(DATE)'" ./cmd/hargo
+	$(GO) install -ldflags "-s -w -X main.Version=$(VERSION) -X main.CommitHash=$(HASH) -X 'main.CompileDate=$(DATE)'" ./cmd/har$(GO)
 
 update:
 	git pull
-	go install
+	$(GO) install
 
 test:
-	go install
-	go test ./cmd/hargo/main
+	$(GO) install
+	$(GO) test ./cmd/hargo/main
 
 clean:
 	rm -f hargo
