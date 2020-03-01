@@ -10,7 +10,7 @@ HASH = $(shell git rev-parse --short HEAD)
 DATE = $(shell go run tools/build-date.go)
 GOMINORVERSION = $(shell go version | cut -d ' ' -f 3 | cut -d '.' -f 2)
 GOBIN ?= $($GOPATH)/bin
-GO = $(which go)
+GO = $(shell which go)
 
 # Builds hargo
 build:
