@@ -10,7 +10,7 @@ services:
     depends_on:
       - influxdb  
   influxdb:
-    image: influxdb:latest
+    image: influxdb:1.8.0
     ports:
       - '8086:8086'
     volumes:
@@ -20,7 +20,7 @@ services:
       - INFLUXDB_ADMIN_USER=hargo
       - INFLUXDB_ADMIN_PASSWORD=hargo
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:7.0.4
     ports:
       - '3000:3000'
     volumes:
