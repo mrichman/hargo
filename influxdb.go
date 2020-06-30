@@ -71,7 +71,7 @@ func WritePoint(u url.URL, results chan TestResult) {
 
 		bp, err := client.NewBatchPoints(client.BatchPointsConfig{
 			Database:  db,
-			Precision: "us",
+			Precision: "ms",
 		})
 
 		fields := map[string]interface{}{
