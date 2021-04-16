@@ -35,7 +35,7 @@ GLOBAL OPTIONS:
    --version, -v  print the version
 
 COPYRIGHT:
-   (c) 2019 Mark A. Richman
+   (c) 2021 Mark A. Richman
 ```
 
 ## Building and Running Hargo
