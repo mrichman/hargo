@@ -38,23 +38,13 @@ COPYRIGHT:
    (c) 2019 Mark A. Richman
 ```
 
-## Running Hargo
+## Building and Running Hargo
 
-```text
-go get github.com/mrichman/hargo
-export GOPATH=$HOME/go
-cd $GOPATH/src/github.com/mrichman/hargo
-go run cmd/hargo/hargo.go validate test/golang.org.har
-```
-
-## Building from source
-
-Make sure that you have Go version 1.14 or greater (I haven't tested with lower) and that your `GOPATH` env variable is set (I recommand setting it to `~/go` if you don't have one). If `GOBIN` is not set, also try setting that to `~/go/bin`, as `make install` may fail. You can check all Go environment variables with `go env`.
-
-```text
-go get -d github.com/mrichman/hargo
-cd $GOPATH/src/github.com/mrichman/hargo
+```sh
+git clone https://github.com/mrichman/hargo.git
+cd hargo
 make install
+hargo validate test/golang.org.har
 ```
 
 ## About HAR Files
