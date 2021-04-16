@@ -18,7 +18,7 @@ build:
 
 # Same as 'build' but installs to $GOBIN afterward
 install:
-	$(GO) install -ldflags "-s -w -X main.Version=$(VERSION) -X main.CommitHash=$(HASH) -X 'main.CompileDate=$(DATE)'" ./cmd/har$(GO)
+	$(GO) install -ldflags "-s -w -X main.Version=$(VERSION) -X main.CommitHash=$(HASH) -X 'main.CompileDate=$(DATE)'" ./cmd/hargo
 
 update:
 	git pull
