@@ -1,7 +1,7 @@
 # This is a multi-stage build.
 
 # build stage
-FROM golang:1.16-alpine3.13 AS builder
+FROM golang:1.17-alpine3.14 AS builder
 WORKDIR /go/src/hargo
 COPY . /go/src/hargo
 
@@ -9,8 +9,6 @@ ARG VERSION
 ARG HASH
 ARG DATE
 
-ENV GO111MODULE=on
-ENV GOPROXY=https://proxy.golang.org
 RUN go mod download
 
 ENV CGO_ENABLED=0

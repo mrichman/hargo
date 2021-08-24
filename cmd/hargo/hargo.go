@@ -42,7 +42,7 @@ func main() {
 			Email: "mark@markrichman.com",
 		},
 	}
-	app.Copyright = "(c) 2019 Mark A. Richman"
+	app.Copyright = "(c) 2021 Mark A. Richman"
 	app.HelpName = "hargo"
 	app.Usage = usage
 	app.UsageText = "hargo <command> [arguments] <.har file>"
