@@ -9,7 +9,7 @@ https://w3c.github.io/web-performance/specs/HAR/Overview.html
 
 // Har is a container type for deserialization
 type Har struct {
-	Log Log
+	Log Log `json:"log"`
 }
 
 // Log represents the root of the exported data. This object MUST be present and its name MUST be "log".
