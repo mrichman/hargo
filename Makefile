@@ -1,4 +1,4 @@
-.PHONY: runtime
+.PHONY: build install update test clean docker
 
 IMAGE := hargo
 VERSION := $(shell git rev-parse HEAD)

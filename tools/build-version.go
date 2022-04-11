@@ -1,3 +1,4 @@
+//go:build ignore
 // +build ignore
 
 package main
@@ -31,7 +32,7 @@ func getTag(match ...string) (string, *semver.PRVersion) {
 func main() {
 	// Find the last vX.X.X Tag and get how many builds we are ahead of it.
 	versionStr, ahead := getTag("--match", "v*")
-	version, err := semver.ParseTolerant(versionStr)
+	version, err := semver.Parse(versionStr)
 	if err != nil {
 		// no version tag found so just return what ever we can find.
 		fmt.Println("0.0.0-unknown")
