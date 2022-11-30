@@ -102,7 +102,8 @@ type PageTiming struct {
 // Entry is a unique, optional Reference to the parent page.
 // Leave out this field if the application does not support grouping by pages.
 type Entry struct {
-	Pageref string `json:"pageref,omitempty"`
+	ResourceType string `json:"_resourceType"`
+	Pageref      string `json:"pageref,omitempty"`
 	// Date and time stamp of the request start
 	// (ISO 8601 YYYY-MM-DDThh:mm:ss.sTZD).
 	StartedDateTime string `json:"startedDateTime"`
