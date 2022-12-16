@@ -10,7 +10,6 @@ require (
 )
 
 require (
-	github.com/blang/semver v2.2.0+incompatible // indirect
 	golang.org/x/sys v0.0.0-20220408201424-a24fb2fb8a0f // indirect
 	golang.org/x/text v0.3.7 // indirect
 )

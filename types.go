@@ -272,6 +272,9 @@ type Content struct {
 	Encoding string `json:"encoding,omitempty"`
 	// optional (new in 1.2) A comment provided by the user or the application.
 	Comment string `json:"comment,omitempty"`
+	// optional (community enhancement) A path to an attached file containing this content
+	// used by Playwright
+	File string `json:"_file,omitempty"`
 }
 
 // Cache contains info about a request coming from browser cache.
