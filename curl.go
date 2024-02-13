@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/alessio/shellescape"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -50,18 +51,18 @@ func fromEntry(entry Entry) (string, error) {
 		for _, cookie := range entry.Request.Cookies {
 			cookies = append(cookies, url.QueryEscape(cookie.Name)+"="+url.QueryEscape(cookie.Value))
 		}
-		command += " -b \"" + strings.Join(cookies[:], "&") + "\" "
+		command += " -b " + shellescape.Quote(strings.Join(cookies[:], "&")) + " "
 	}
 
 	for _, h := range entry.Request.Headers {
-		command += " -H \"" + h.Name + ": " + h.Value + "\" "
+		command += " -H " + shellescape.Quote(h.Name+": "+h.Value) + " "
 	}
 
 	if entry.Request.Method == "POST" && len(entry.Request.PostData.Text) > 0 {
-		command += "-d \"" + entry.Request.PostData.Text + "\""
+		command += "-d " + shellescape.Quote(entry.Request.PostData.Text)
 	}
 
-	command += " \"" + entry.Request.URL + "\""
+	command += " " + shellescape.Quote(entry.Request.URL)
 
 	return command, nil
 }
