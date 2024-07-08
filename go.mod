@@ -1,6 +1,6 @@
 module github.com/mrichman/hargo
 
-go 1.18
+go 1.22
 
 require (
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
@@ -11,6 +11,7 @@ require (
 
 require (
 	github.com/alessio/shellescape v1.4.2 // indirect
+	github.com/blang/semver v3.5.1+incompatible // indirect
 	golang.org/x/sys v0.0.0-20220408201424-a24fb2fb8a0f // indirect
 	golang.org/x/text v0.3.7 // indirect
 )

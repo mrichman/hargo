@@ -15,7 +15,7 @@ USAGE:
    hargo <command> [arguments] <.har file>
 
 VERSION:
-   0.1.2-dev.57 (da53069)
+   0.2.0
 
 AUTHOR:
    Mark A. Richman <mark@markrichman.com>
@@ -35,7 +35,7 @@ GLOBAL OPTIONS:
    --version, -v  print the version
 
 COPYRIGHT:
-   (c) 2022 Mark A. Richman
+   (c) 2024 Mark A. Richman
 ```
 
 ## Building and Running Hargo
