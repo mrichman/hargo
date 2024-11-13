@@ -1,6 +1,6 @@
 module github.com/mrichman/hargo
 
-go 1.22
+go 1.22.0
 
 require (
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
