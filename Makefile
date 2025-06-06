@@ -26,7 +26,8 @@ update:
 
 test:
 	$(GO) install
-	$(GO) test ./cmd/hargo/main
+	$(GO) test ./...
+	$(GO) test -race -coverprofile=coverage.out -covermode=atomic ./...
 
 clean:
 	rm -f hargo

@@ -26,6 +26,7 @@ COMMANDS:
      run, r       Run .har file
      validate, v  Validate .har file
      dump, d      Dump .har file
+     extract, e   Extract content from .har file
      load, l      Load test .har file
      help, h      Shows a list of commands or help for one command
 
@@ -95,6 +96,16 @@ HAR file format is defined here: <https://w3c.github.io/web-performance/specs/HA
 Dump prints information about all HTTP requests in .har file
 
 `hargo dump foo.har`
+
+### Extract
+
+Extract response content from .har file to filesystem
+
+`hargo extract foo.har`
+
+This will create a timestamped directory containing all response content organized by domain. Use `--sort` to organize by content type instead.
+
+`hargo extract --sort foo.har`
 
 ### Load
 

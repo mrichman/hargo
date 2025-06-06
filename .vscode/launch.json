@@ -1,12 +1,104 @@
 {
   "version": "0.2.0",
-  "configurations": [{
-    "name": "Debug test file",
-    "type": "go",
-    "request": "launch",
-    "mode": "debug",
-    "program": "${workspaceFolder}/cmd/hargo/hargo.go",
-    "env": {},
-    "args": ["--", "f", "${workspaceFolder}/test/en.wikipedia.org.har"]
-  }]
+  "configurations": [
+    {
+      "name": "hargo: fetch",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/hargo",
+      "args": ["fetch", "test/golang.org.har"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "hargo: curl",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/hargo",
+      "args": ["curl", "test/golang.org.har"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "hargo: run",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/hargo",
+      "args": ["run", "test/golang.org.har"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "hargo: run (ignore cookies)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/hargo",
+      "args": ["run", "--ignore-har-cookies", "test/golang.org.har"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "hargo: validate",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/hargo",
+      "args": ["validate", "test/golang.org.har"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "hargo: dump",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/hargo",
+      "args": ["dump", "test/golang.org.har"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "hargo: extract (by domain)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/hargo",
+      "args": ["extract", "test/golang.org.har"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "hargo: extract (by type)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/hargo",
+      "args": ["extract", "--sort", "test/golang.org.har"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "hargo: load test",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/hargo",
+      "args": ["load", "--workers", "2", "--duration", "10", "test/golang.org.har"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "hargo: load test (with InfluxDB)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/hargo",
+      "args": ["load", "--workers", "2", "--duration", "10", "--influxurl", "http://localhost:8086", "test/golang.org.har"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "hargo: debug mode",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/hargo",
+      "args": ["--debug", "dump", "test/golang.org.har"],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
 }

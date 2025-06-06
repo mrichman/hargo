@@ -232,6 +232,36 @@ func main() {
 				}
 			},
 		},
+		{
+			Name:        "extract",
+			Aliases:     []string{"e"},
+			Usage:       "Extract content from .har file",
+			UsageText:   "extract - extract response content from .har file to filesystem",
+			Description: "extract all response content from .har file, organizing by domain or content type",
+			ArgsUsage:   "<.har file>",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "sort, s",
+					Usage: "Sort files by content type instead of domain"},
+			},
+			Action: func(c *cli.Context) {
+				harFile := c.Args().First()
+				sortByType := c.Bool("sort")
+				log.Infof("extract .har file: %s", harFile)
+				file, err := os.Open(harFile)
+				if err == nil {
+					r := hargo.NewReader(file)
+					err = hargo.Extract(r, sortByType)
+					if err != nil {
+						log.Fatal("Extract failed: ", err)
+						os.Exit(-1)
+					}
+				} else {
+					log.Fatal("Cannot open file: ", harFile)
+					os.Exit(-1)
+				}
+			},
+		},
 	}
 
 	app.Run(os.Args)
