@@ -27,7 +27,9 @@ func Fetch(r *bufio.Reader) error {
 }
 
 // FetchTo downloads all resources referenced in .har file into outdir,
-// creating it if necessary.
+// creating it if necessary. An entry that cannot be built or downloaded is
+// logged and skipped so that one bad resource does not abandon the rest;
+// FetchTo reports how many failed.
 func FetchTo(r *bufio.Reader, outdir string) error {
 	har, err := Decode(r)
 	if err != nil {
@@ -38,6 +40,9 @@ func FetchTo(r *bufio.Reader, outdir string) error {
 		return err
 	}
 
+	alloc := newNameAllocator(outdir)
+	failed := 0
+
 	for _, entry := range har.Log.Entries {
 
 		//TODO create goroutine here to parallelize requests
@@ -47,6 +52,7 @@ func FetchTo(r *bufio.Reader, outdir string) error {
 		req, err := http.NewRequest(entry.Request.Method, entry.Request.URL, nil)
 		if err != nil {
 			log.Errorf("skipping entry %s: %v", entry.Request.URL, err)
+			failed++
 			continue
 		}
 
@@ -72,21 +78,39 @@ func FetchTo(r *bufio.Reader, outdir string) error {
 			req.AddCookie(cookie)
 		}
 
-		err = downloadFile(req, outdir)
-
-		if err != nil {
-			log.Error(err)
-			return err
+		// A single unreachable asset must not abandon the remaining downloads.
+		if err := downloadFile(req, alloc); err != nil {
+			log.Errorf("downloading %s: %v", entry.Request.URL, err)
+			failed++
 		}
+	}
+
+	if failed > 0 {
+		return fmt.Errorf("%d of %d entries failed", failed, len(har.Log.Entries))
 	}
 
 	return nil
 }
 
 // uniqueName derives an output file name from urlPath, appending a numeric
-// suffix when that name is already taken so that entries sharing a basename do
-// not silently overwrite each other.
-func uniqueName(outdir, urlPath string) (string, error) {
+// nameAllocator hands out unique file names within a directory.
+//
+// It remembers the next suffix to try for each basename, so N entries sharing a
+// name cost O(N) probes in total rather than the O(N^2) of rescanning from 1
+// every time. Names are claimed with O_EXCL, which also removes the race
+// between checking for a free name and creating the file.
+type nameAllocator struct {
+	dir  string
+	next map[string]int
+}
+
+func newNameAllocator(dir string) *nameAllocator {
+	return &nameAllocator{dir: dir, next: make(map[string]int)}
+}
+
+// create opens a new file for urlPath under the allocator's directory, choosing
+// a name that is not already taken, and returns it with the chosen path.
+func (a *nameAllocator) create(urlPath string) (*os.File, string, error) {
 	// path.Base returns "/" for a root path and "." for an empty one; neither is
 	// a usable file name. It also strips any ".." traversal.
 	base := path.Base(urlPath)
@@ -94,24 +118,30 @@ func uniqueName(outdir, urlPath string) (string, error) {
 		base = "index.html"
 	}
 
-	candidate := filepath.Join(outdir, base)
-	if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
-		return candidate, nil
-	}
-
 	ext := path.Ext(base)
 	stem := strings.TrimSuffix(base, ext)
-	for i := 1; i < 10000; i++ {
-		candidate = filepath.Join(outdir, fmt.Sprintf("%s-%d%s", stem, i, ext))
-		if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
-			return candidate, nil
+
+	// Start from the highest suffix already handed out for this basename. There
+	// is deliberately no upper bound: the only limit is the filesystem's.
+	for i := a.next[base]; ; i++ {
+		name := base
+		if i > 0 {
+			name = fmt.Sprintf("%s-%d%s", stem, i, ext)
+		}
+
+		full := filepath.Join(a.dir, name)
+		f, err := os.OpenFile(full, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			a.next[base] = i + 1
+			return f, full, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return nil, "", err
 		}
 	}
-
-	return "", fmt.Errorf("cannot find an unused file name for %q in %s", base, outdir)
 }
 
-func downloadFile(req *http.Request, outdir string) error {
+func downloadFile(req *http.Request, alloc *nameAllocator) error {
 	jar, _ := cookiejar.New(nil)
 
 	jar.SetCookies(req.URL, req.Cookies())
@@ -153,15 +183,9 @@ func downloadFile(req *http.Request, outdir string) error {
 		log.Warnf("unsupported Content-Encoding %q for %s, saving encoded bytes", enc, req.URL)
 	}
 
-	// Name the file only once the response is in hand, so a failed request does
-	// not leave an empty file behind or consume a name.
-	fileName, err := uniqueName(outdir, req.URL.Path)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-
-	file, err := os.Create(fileName)
+	// Name and create the file only once the response is in hand, so a failed
+	// request does not leave an empty file behind or consume a name.
+	file, fileName, err := alloc.create(req.URL.Path)
 	if err != nil {
 		log.Error(err)
 		return err

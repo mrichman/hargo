@@ -31,6 +31,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `hargo fetch` no longer fails outright on a URL with no path, where
   `path.Base` yields `"."` and the file could not be created.
 - `hargo fetch` no longer leaves a zero-byte file behind when a download fails.
+- `hargo fetch` no longer abandons every remaining resource when one download
+  fails. A failing entry is logged and skipped, matching `hargo run`, and the
+  number of failures is reported so the exit code is still non-zero.
+- `hargo fetch` no longer needs O(N^2) filesystem probes to name N resources
+  sharing a basename, and no longer gives up after 10,000 collisions. Names are
+  claimed with `O_EXCL`, which also removes the race between finding a free name
+  and creating the file.
 - `Validate` no longer calls `os.Exit(-2)`, which made the failure path
   untestable and terminated any process using the library. It returns a
   descriptive error instead, and reports an unsupported HAR version rather than
@@ -59,6 +66,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `hargo run` can now compress or skip the recorded delays between entries.
+  Previously a HAR spanning ten minutes always took ten minutes to replay.
+  - `--speed N` scales the delays, so `--speed 2` replays twice as fast.
+  - `--no-wait` issues every request back to back.
+  - `--max-delay D` caps the wait before any single entry, which is useful for
+    HARs containing minutes of user idle time.
+- `RunWithOptions(r *bufio.Reader, opts RunOptions) error` exposes the above to
+  library callers. `Run` is unchanged and still replays in real time, and the
+  zero value of `RunOptions` behaves identically to it.
 - Release automation: CI now runs goreleaser on `v*` tags, gated on every other
   job passing, and validates `.goreleaser.yml` on every push. The four
   hand-rolled release scripts in `tools/` (425 lines) are removed in favour of

@@ -81,6 +81,9 @@ Compressed responses are decompressed before being written, and entries whose
 paths share a filename are saved as `name.ext`, `name-1.ext`, and so on rather
 than overwriting each other.
 
+A resource that cannot be fetched is reported and skipped, so one broken URL
+does not abandon the rest. `hargo fetch` exits non-zero if any entry failed.
+
 ### Curl
 
 The `curl` command will output a [curl](https://curl.haxx.se/) command line for each entry in the .har file.
@@ -89,9 +92,23 @@ The `curl` command will output a [curl](https://curl.haxx.se/) command line for 
 
 ### Run
 
-The `run` command executes each HTTP request in .har file:
+The `run` command executes each request in the .har file, in the order and with
+the timing they were recorded:
 
 `hargo run foo.har`
+
+Recorded delays can be compressed or dropped, which matters for HARs that span
+minutes of real time:
+
+```sh
+hargo run --speed 4 foo.har          # replay four times faster
+hargo run --no-wait foo.har          # ignore the delays entirely
+hargo run --max-delay 2s foo.har     # cap any single wait at two seconds
+```
+
+An entry that cannot be built or sent is reported and skipped, so one broken
+request does not abandon the rest. `hargo run` exits non-zero if any entry
+failed.
 
 This is similar to `fetch` but will not save any output.
 

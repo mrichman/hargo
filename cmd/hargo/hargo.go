@@ -132,11 +132,18 @@ func main() {
 				cli.BoolFlag{
 					Name:  "insecure-skip-verify",
 					Usage: "Skips the TLS security checks"},
+				cli.Float64Flag{
+					Name:  "speed",
+					Value: 1,
+					Usage: "Replay speed multiplier for the recorded delays (2 = twice as fast)"},
+				cli.BoolFlag{
+					Name:  "no-wait",
+					Usage: "Ignore the recorded delays and issue requests back to back"},
+				cli.DurationFlag{
+					Name:  "max-delay",
+					Usage: "Cap the wait before any single entry, e.g. 2s (0 = no cap)"},
 			},
 			Action: func(c *cli.Context) error {
-				ignoreHarCookies := c.Bool("ignore-har-cookies")
-				insecureSkipVerify := c.Bool("insecure-skip-verify")
-
 				file, err := openHar(c)
 				if err != nil {
 					return err
@@ -144,7 +151,13 @@ func main() {
 				defer func() { _ = file.Close() }()
 
 				log.Info("run .har file: ", c.Args().First())
-				return hargo.Run(hargo.NewReader(file), ignoreHarCookies, insecureSkipVerify)
+				return hargo.RunWithOptions(hargo.NewReader(file), hargo.RunOptions{
+					IgnoreHarCookies:   c.Bool("ignore-har-cookies"),
+					InsecureSkipVerify: c.Bool("insecure-skip-verify"),
+					Speed:              c.Float64("speed"),
+					NoWait:             c.Bool("no-wait"),
+					MaxDelay:           c.Duration("max-delay"),
+				})
 			},
 		},
 		{
