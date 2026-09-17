@@ -16,23 +16,53 @@ linters:
     - unconvert
     - errorlint
     - copyloopvar
+    - godot
+    - gocritic
+    - usestdlibvars
+    - errname
+    - nilerr
+    - predeclared
+    - wastedassign
+    - nakedret
+    - containedctx
 
   settings:
-    revive:
-      rules:
-        - name: exported
-          disabled: true
     staticcheck:
       checks:
         - all
+    revive:
+      rules:
+        - name: exported
+        - name: var-naming
+        - name: package-comments
+        - name: indent-error-flow
+        - name: error-return
+        - name: error-naming
+        - name: errorf
+        - name: receiver-naming
+        - name: increment-decrement
+        - name: range
+        - name: unexported-return
+        - name: context-as-argument
+        - name: bare-return
+        # Boolean parameters are replaced by options structs where they were
+        # part of the public API; the few that remain are internal.
+        - name: flag-parameter
+          disabled: true
 
   exclusions:
     rules:
-      # Test servers write fixed payloads to a ResponseWriter; a failed write
-      # there is not something the test can act on.
+      # Test servers write fixed payloads to a ResponseWriter, and fixtures are
+      # closed via t.Cleanup; a failure there is not something a test can act on.
       - path: _test\.go
         linters:
           - errcheck
+      # Test helpers and table-driven cases do not need doc comments or the
+      # stricter style checks aimed at the public API.
+      - path: _test\.go
+        linters:
+          - godot
+          - revive
 
 formatters:
   enable:

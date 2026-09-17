@@ -61,7 +61,7 @@ func TestFromEntryBasics(t *testing.T) {
 					{Name: "theme", Value: "dark"},
 				}
 			},
-			wantContain: []string{"-b 'session=abc123&theme=dark'"},
+			wantContain: []string{"-b 'session=abc123; theme=dark'"},
 		},
 		{
 			name: "POST with text body",
@@ -80,10 +80,7 @@ func TestFromEntryBasics(t *testing.T) {
 			if tt.mutate != nil {
 				tt.mutate(&e)
 			}
-			got, err := fromEntry(e)
-			if err != nil {
-				t.Fatalf("fromEntry() error = %v", err)
-			}
+			got := fromEntry(e)
 			for _, want := range tt.wantContain {
 				if !strings.Contains(got, want) {
 					t.Errorf("fromEntry() = %q\n  missing %q", got, want)
@@ -108,10 +105,7 @@ func TestFromEntryEmitsBodyForNonPostMethods(t *testing.T) {
 			e.Request.URL = "http://example.com/a"
 			e.Request.PostData.Text = `{"k":"v"}`
 
-			got, err := fromEntry(e)
-			if err != nil {
-				t.Fatalf("fromEntry() error = %v", err)
-			}
+			got := fromEntry(e)
 			if !strings.Contains(got, `-d '{"k":"v"}'`) {
 				t.Errorf("%s body dropped: %q", method, got)
 			}
@@ -131,10 +125,7 @@ func TestFromEntryEmitsFormParams(t *testing.T) {
 		{Name: "pass", Value: "s3cret"},
 	}
 
-	got, err := fromEntry(e)
-	if err != nil {
-		t.Fatalf("fromEntry() error = %v", err)
-	}
+	got := fromEntry(e)
 	if !strings.Contains(got, "-d 'pass=s3cret&user=bob'") {
 		t.Errorf("form params dropped: %q", got)
 	}
@@ -147,10 +138,7 @@ func TestFromEntryShellEscaping(t *testing.T) {
 	e.Request.Headers = []NVP{{Name: "X-Evil", Value: "a'; rm -rf /; echo '"}}
 	e.Request.PostData.Text = "$(whoami)`id`"
 
-	got, err := fromEntry(e)
-	if err != nil {
-		t.Fatalf("fromEntry() error = %v", err)
-	}
+	got := fromEntry(e)
 
 	// Command substitution must be quoted, not left bare for the shell.
 	if strings.Contains(got, "-d $(whoami)") {
@@ -167,7 +155,7 @@ func TestToCurlMultipleEntries(t *testing.T) {
 		entryJSON("2024-01-01T00:00:01.000Z", "GET", "http://example.com/one") + "," +
 			entryJSON("2024-01-01T00:00:02.000Z", "GET", "http://example.com/two"))
 
-	got, err := ToCurl(NewReader(strings.NewReader(har)))
+	got, err := ToCurl(strings.NewReader(har))
 	if err != nil {
 		t.Fatalf("ToCurl() error = %v", err)
 	}
@@ -185,7 +173,7 @@ func TestToCurlMultipleEntries(t *testing.T) {
 // Regression: the JSON decode error was logged and then discarded, so callers
 // received ("", nil) and could not tell that nothing had been converted.
 func TestToCurlMalformedJSONReturnsError(t *testing.T) {
-	got, err := ToCurl(NewReader(strings.NewReader(`{"log":{ THIS IS NOT JSON`)))
+	got, err := ToCurl(strings.NewReader(`{"log":{ THIS IS NOT JSON`))
 	if err == nil {
 		t.Fatalf("ToCurl() error = nil, want non-nil (got %q)", got)
 	}
@@ -195,7 +183,7 @@ func TestToCurlMalformedJSONReturnsError(t *testing.T) {
 }
 
 func TestToCurlEmptyEntries(t *testing.T) {
-	got, err := ToCurl(NewReader(strings.NewReader(harWith(""))))
+	got, err := ToCurl(strings.NewReader(harWith("")))
 	if err != nil {
 		t.Fatalf("ToCurl() error = %v", err)
 	}
@@ -204,9 +192,9 @@ func TestToCurlEmptyEntries(t *testing.T) {
 	}
 }
 
-func TestToCurlRealHarFixture(t *testing.T) {
-	f := openFixture(t, "test/golang.org.har")
-	got, err := ToCurl(NewReader(f))
+func TestToCurlRealHARFixture(t *testing.T) {
+	f := openFixture(t, "testdata/golang.org.har")
+	got, err := ToCurl(f)
 	if err != nil {
 		t.Fatalf("ToCurl() error = %v", err)
 	}
@@ -230,10 +218,7 @@ func TestFromEntryDropsPseudoHeaders(t *testing.T) {
 		{Name: "accept", Value: "text/html"},
 	}
 
-	got, err := fromEntry(e)
-	if err != nil {
-		t.Fatalf("fromEntry() error = %v", err)
-	}
+	got := fromEntry(e)
 
 	for _, ph := range []string{":method", ":authority", ":scheme", ":path"} {
 		if strings.Contains(got, ph) {
@@ -254,10 +239,7 @@ func TestFromEntryDropsInvalidHeaderNames(t *testing.T) {
 		{Name: "Good-Name", Value: "y"},
 	}
 
-	got, err := fromEntry(e)
-	if err != nil {
-		t.Fatalf("fromEntry() error = %v", err)
-	}
+	got := fromEntry(e)
 	if strings.Contains(got, "Bad") {
 		t.Errorf("invalid header name leaked: %q", got)
 	}
@@ -275,10 +257,7 @@ func TestFromEntrySkipsDuplicateCookieHeader(t *testing.T) {
 	e.Request.Cookies = []Cookie{{Name: "session", Value: "abc123"}}
 	e.Request.Headers = []NVP{{Name: "Cookie", Value: "session=abc123"}}
 
-	got, err := fromEntry(e)
-	if err != nil {
-		t.Fatalf("fromEntry() error = %v", err)
-	}
+	got := fromEntry(e)
 	if !strings.Contains(got, "-b session=abc123") {
 		t.Errorf("expected -b cookie flag: %q", got)
 	}
@@ -295,10 +274,7 @@ func TestFromEntryKeepsCookieHeaderWhenNoCookiesArray(t *testing.T) {
 	e.Request.URL = "https://example.com/"
 	e.Request.Headers = []NVP{{Name: "Cookie", Value: "session=abc123"}}
 
-	got, err := fromEntry(e)
-	if err != nil {
-		t.Fatalf("fromEntry() error = %v", err)
-	}
+	got := fromEntry(e)
 	if !strings.Contains(got, "-H 'Cookie: session=abc123'") {
 		t.Errorf("Cookie header dropped with no cookies array: %q", got)
 	}
@@ -306,8 +282,8 @@ func TestFromEntryKeepsCookieHeaderWhenNoCookiesArray(t *testing.T) {
 
 // The real fixture is full of HTTP/2 pseudo-headers.
 func TestToCurlFixtureHasNoPseudoHeaders(t *testing.T) {
-	f := openFixture(t, "test/golang.org.har")
-	got, err := ToCurl(NewReader(f))
+	f := openFixture(t, "testdata/golang.org.har")
+	got, err := ToCurl(f)
 	if err != nil {
 		t.Fatalf("ToCurl() error = %v", err)
 	}

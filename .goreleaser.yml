@@ -57,6 +57,7 @@ archives:
       - README.md
       - LICENSE
       - CHANGELOG.md
+      - MIGRATING.md
 
 checksum:
   name_template: checksums.txt

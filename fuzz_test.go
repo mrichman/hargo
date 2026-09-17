@@ -21,7 +21,7 @@ func FuzzDecode(f *testing.F) {
 	f.Add("\xef\xbb\xbf{}")
 
 	f.Fuzz(func(t *testing.T, in string) {
-		har, err := Decode(NewReader(strings.NewReader(in)))
+		har, err := Decode(strings.NewReader(in))
 		if err != nil {
 			return
 		}
@@ -49,14 +49,9 @@ func FuzzValidate(f *testing.F) {
 	f.Add(``)
 
 	f.Fuzz(func(t *testing.T, in string) {
-		ok, err := Validate(NewReader(strings.NewReader(in)))
-		// ok and err must never disagree.
-		if ok && err != nil {
-			t.Fatalf("Validate reported ok with error %v", err)
-		}
-		if !ok && err == nil {
-			t.Fatal("Validate reported not-ok with a nil error")
-		}
+		// The only contract is that Validate must not panic; any input either
+		// validates or returns a descriptive error.
+		_ = Validate(strings.NewReader(in))
 	})
 }
 
@@ -67,7 +62,7 @@ func FuzzToCurl(f *testing.F) {
 	f.Add(`{"log":{`)
 
 	f.Fuzz(func(t *testing.T, in string) {
-		out, err := ToCurl(NewReader(strings.NewReader(in)))
+		out, err := ToCurl(strings.NewReader(in))
 		if err != nil {
 			if out != "" {
 				t.Fatalf("ToCurl returned output %q alongside error %v", out, err)
@@ -117,7 +112,7 @@ func FuzzEntryToRequest(f *testing.F) {
 		e.Request.URL = rawURL
 		e.Request.Headers = []NVP{{Name: hName, Value: hValue}}
 
-		req, err := EntryToRequest(e, true)
+		req, err := EntryToRequest(t.Context(), e, EntryOptions{IgnoreHARCookies: true})
 		// The (nil, nil) return was a real bug: callers dereferenced it.
 		if err == nil && req == nil {
 			t.Fatal("EntryToRequest returned (nil, nil)")

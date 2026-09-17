@@ -54,7 +54,7 @@ func TestRunExecutesAllEntriesInOrder(t *testing.T) {
 			entryJSON("2024-01-01T00:00:00.002Z", "GET", srv.URL+"/second") + "," +
 			entryJSON("2024-01-01T00:00:00.003Z", "GET", srv.URL+"/third"))
 
-	if err := Run(NewReader(strings.NewReader(har)), true, true); err != nil {
+	if err := Run(t.Context(), strings.NewReader(har), RunOptions{IgnoreHARCookies: true, InsecureSkipVerify: true}); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 
@@ -71,13 +71,13 @@ func TestRunExecutesAllEntriesInOrder(t *testing.T) {
 }
 
 func TestRunEmptyEntries(t *testing.T) {
-	if err := Run(NewReader(strings.NewReader(harWith(""))), true, true); err != nil {
+	if err := Run(t.Context(), strings.NewReader(harWith("")), RunOptions{IgnoreHARCookies: true, InsecureSkipVerify: true}); err != nil {
 		t.Errorf("Run() error = %v, want nil for an empty entry list", err)
 	}
 }
 
 func TestRunMalformedJSONReturnsError(t *testing.T) {
-	if err := Run(NewReader(strings.NewReader(`{"log":{ BROKEN`)), true, true); err == nil {
+	if err := Run(t.Context(), strings.NewReader(`{"log":{ BROKEN`), RunOptions{IgnoreHARCookies: true, InsecureSkipVerify: true}); err == nil {
 		t.Error("Run() error = nil, want non-nil for malformed JSON")
 	}
 }
@@ -96,7 +96,7 @@ func TestRunSkipsUnparseableEntryAndContinues(t *testing.T) {
 			entryJSON("2024-01-01T00:00:00.003Z", "BAD METHOD", srv.URL+"/badmethod") + "," +
 			entryJSON("2024-01-01T00:00:00.004Z", "GET", srv.URL+"/alsogood"))
 
-	if err := Run(NewReader(strings.NewReader(har)), true, true); err == nil {
+	if err := Run(t.Context(), strings.NewReader(har), RunOptions{IgnoreHARCookies: true, InsecureSkipVerify: true}); err == nil {
 		t.Fatal("Run() error = nil, want non-nil: two entries could not be built")
 	} else if !strings.Contains(err.Error(), "2 of 4 entries failed") {
 		t.Errorf("Run() error = %q, want it to report 2 of 4 failures", err)
@@ -125,7 +125,7 @@ func TestRunContinuesAfterTransportError(t *testing.T) {
 		entryJSON("2024-01-01T00:00:00.001Z", "GET", "http://127.0.0.1:0/dead") + "," +
 			entryJSON("2024-01-01T00:00:00.002Z", "GET", srv.URL+"/alive"))
 
-	if err := Run(NewReader(strings.NewReader(har)), true, true); err == nil {
+	if err := Run(t.Context(), strings.NewReader(har), RunOptions{IgnoreHARCookies: true, InsecureSkipVerify: true}); err == nil {
 		t.Fatal("Run() error = nil, want non-nil: one entry was unreachable")
 	} else if !strings.Contains(err.Error(), "1 of 2 entries failed") {
 		t.Errorf("Run() error = %q, want it to report 1 of 2 failures", err)
@@ -145,7 +145,7 @@ func TestRunNon2xxIsNotAnError(t *testing.T) {
 	defer srv.Close()
 
 	har := harWith(entryJSON("2024-01-01T00:00:00.001Z", "GET", srv.URL+"/missing"))
-	if err := Run(NewReader(strings.NewReader(har)), true, true); err != nil {
+	if err := Run(t.Context(), strings.NewReader(har), RunOptions{IgnoreHARCookies: true, InsecureSkipVerify: true}); err != nil {
 		t.Errorf("Run() error = %v, want nil (a 404 is a valid response)", err)
 	}
 	if got := rec.seen(); len(got) != 1 {
@@ -153,14 +153,14 @@ func TestRunNon2xxIsNotAnError(t *testing.T) {
 	}
 }
 
-func TestRunHonoursIgnoreHarCookies(t *testing.T) {
+func TestRunHonoursIgnoreHARCookies(t *testing.T) {
 	tests := []struct {
 		name             string
-		ignoreHarCookies bool
+		ignoreHARCookies bool
 		wantCookie       bool
 	}{
-		{name: "cookies sent", ignoreHarCookies: false, wantCookie: true},
-		{name: "cookies ignored", ignoreHarCookies: true, wantCookie: false},
+		{name: "cookies sent", ignoreHARCookies: false, wantCookie: true},
+		{name: "cookies ignored", ignoreHARCookies: true, wantCookie: false},
 	}
 
 	for _, tt := range tests {
@@ -174,7 +174,7 @@ func TestRunHonoursIgnoreHarCookies(t *testing.T) {
 				"request":{"method":"GET","url":"` + srv.URL + `/c","httpVersion":"HTTP/1.1",
 				"cookies":[{"name":"session","value":"abc123"}]}}]}}`
 
-			if err := Run(NewReader(strings.NewReader(har)), tt.ignoreHarCookies, true); err != nil {
+			if err := Run(t.Context(), strings.NewReader(har), RunOptions{IgnoreHARCookies: tt.ignoreHARCookies, InsecureSkipVerify: true}); err != nil {
 				t.Fatalf("Run() error = %v", err)
 			}
 
@@ -210,7 +210,7 @@ func TestRunSendsPostBody(t *testing.T) {
 		"request":{"method":"POST","url":"` + srv.URL + `/submit","httpVersion":"HTTP/1.1",
 		"postData":{"mimeType":"application/json","text":"{\"k\":\"v\"}"}}}]}}`
 
-	if err := Run(NewReader(strings.NewReader(har)), true, true); err != nil {
+	if err := Run(t.Context(), strings.NewReader(har), RunOptions{IgnoreHARCookies: true, InsecureSkipVerify: true}); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 
@@ -232,7 +232,7 @@ func TestRunSkipsWebSocketEntries(t *testing.T) {
 			entryJSON("2024-01-01T00:00:00.002Z", "GET", "wss://127.0.0.1:1/sock2") + "," +
 			entryJSON("2024-01-01T00:00:00.003Z", "GET", srv.URL+"/http"))
 
-	if err := Run(NewReader(strings.NewReader(har)), true, true); err != nil {
+	if err := Run(t.Context(), strings.NewReader(har), RunOptions{IgnoreHARCookies: true, InsecureSkipVerify: true}); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	if got := rec.seen(); len(got) != 1 || got[0] != "/http" {
@@ -327,9 +327,9 @@ func TestRunOptionsDelayBefore(t *testing.T) {
 func TestRunWithOptionsRejectsNegativeSpeed(t *testing.T) {
 	har := harWith(entryJSON("2024-01-01T00:00:00.001Z", "GET", "http://example.com/"))
 
-	err := RunWithOptions(NewReader(strings.NewReader(har)), RunOptions{Speed: -1})
+	err := Run(t.Context(), strings.NewReader(har), RunOptions{Speed: -1})
 	if err == nil {
-		t.Fatal("RunWithOptions() error = nil, want non-nil for a negative speed")
+		t.Fatal("Run(t.Context(), ) error = nil, want non-nil for a negative speed")
 	}
 	if !strings.Contains(err.Error(), "speed") {
 		t.Errorf("error = %q, want it to mention speed", err)
@@ -350,15 +350,15 @@ func TestRunWithOptionsNoWaitSkipsRecordedDelays(t *testing.T) {
 			entryJSON("2024-01-01T00:00:02.000Z", "GET", srv.URL+"/c"))
 
 	start := time.Now()
-	err := RunWithOptions(NewReader(strings.NewReader(har)), RunOptions{
-		IgnoreHarCookies:   true,
+	err := Run(t.Context(), strings.NewReader(har), RunOptions{
+		IgnoreHARCookies:   true,
 		InsecureSkipVerify: true,
 		NoWait:             true,
 	})
 	elapsed := time.Since(start)
 
 	if err != nil {
-		t.Fatalf("RunWithOptions() error = %v", err)
+		t.Fatalf("Run(t.Context(), ) error = %v", err)
 	}
 	if got := len(rec.seen()); got != 3 {
 		t.Errorf("got %d requests, want 3", got)
@@ -380,15 +380,15 @@ func TestRunWithOptionsMaxDelayCapsLongGaps(t *testing.T) {
 			entryJSON("2024-01-01T00:05:00.000Z", "GET", srv.URL+"/b"))
 
 	start := time.Now()
-	err := RunWithOptions(NewReader(strings.NewReader(har)), RunOptions{
-		IgnoreHarCookies:   true,
+	err := Run(t.Context(), strings.NewReader(har), RunOptions{
+		IgnoreHARCookies:   true,
 		InsecureSkipVerify: true,
 		MaxDelay:           50 * time.Millisecond,
 	})
 	elapsed := time.Since(start)
 
 	if err != nil {
-		t.Fatalf("RunWithOptions() error = %v", err)
+		t.Fatalf("Run(t.Context(), ) error = %v", err)
 	}
 	if got := len(rec.seen()); got != 2 {
 		t.Errorf("got %d requests, want 2", got)
@@ -411,7 +411,7 @@ func TestRunStillHonoursRecordedDelays(t *testing.T) {
 			entryJSON("2024-01-01T00:00:00.120Z", "GET", srv.URL+"/b"))
 
 	start := time.Now()
-	if err := Run(NewReader(strings.NewReader(har)), true, true); err != nil {
+	if err := Run(t.Context(), strings.NewReader(har), RunOptions{IgnoreHARCookies: true, InsecureSkipVerify: true}); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	elapsed := time.Since(start)

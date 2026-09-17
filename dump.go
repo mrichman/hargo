@@ -1,20 +1,16 @@
 package hargo
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-
-	log "github.com/sirupsen/logrus"
 )
 
-// Dump prints all HTTP requests in .har file to stdout.
-func Dump(r *bufio.Reader) {
-	if err := DumpTo(os.Stdout, r); err != nil {
-		log.Error(err)
-	}
+// Dump writes a human-readable summary of every entry in a HAR document to
+// stdout.
+func Dump(r io.Reader) error {
+	return DumpTo(os.Stdout, r)
 }
 
 // errWriter records the first write error so that a long series of writes does
@@ -24,17 +20,17 @@ type errWriter struct {
 	err error
 }
 
-func (ew *errWriter) println(args ...interface{}) {
+func (ew *errWriter) println(args ...any) {
 	if ew.err != nil {
 		return
 	}
 	_, ew.err = fmt.Fprintln(ew.w, args...)
 }
 
-// DumpTo writes all HTTP requests in .har file to w.
-func DumpTo(w io.Writer, r *bufio.Reader) error {
-	dec := json.NewDecoder(r)
-	var har Har
+// DumpTo writes a human-readable summary of every entry in a HAR document to w.
+func DumpTo(w io.Writer, r io.Reader) error {
+	dec := json.NewDecoder(NewReader(r))
+	var har HAR
 	if err := dec.Decode(&har); err != nil {
 		return err
 	}

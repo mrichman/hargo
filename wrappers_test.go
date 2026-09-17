@@ -10,18 +10,22 @@ import (
 )
 
 // Dump is a thin wrapper over DumpTo that targets stdout; this only checks that
-// the wrapper wires up without panicking.
+// the wrapper wires up and reports errors.
 func TestDumpWritesToStdout(t *testing.T) {
 	har := harWith(entryJSON("2024-01-01T00:00:00.001Z", "GET", "http://example.com/a"))
-	Dump(NewReader(strings.NewReader(har)))
+	if err := Dump(strings.NewReader(har)); err != nil {
+		t.Errorf("Dump() error = %v", err)
+	}
 }
 
-func TestDumpMalformedInputDoesNotPanic(t *testing.T) {
-	Dump(NewReader(strings.NewReader(`{"log":{ BROKEN`)))
+func TestDumpMalformedInputReturnsError(t *testing.T) {
+	if err := Dump(strings.NewReader(`{"log":{ BROKEN`)); err == nil {
+		t.Error("Dump() error = nil, want non-nil for malformed JSON")
+	}
 }
 
-// Fetch is a thin wrapper over FetchTo that derives a timestamped output
-// directory. Chdir into a temp dir so the artefacts do not land in the repo.
+// An empty FetchOptions.OutDir derives a timestamped output directory. Chdir
+// into a temp dir so the artefacts do not land in the repo.
 func TestFetchCreatesTimestampedDir(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("payload"))
@@ -32,7 +36,7 @@ func TestFetchCreatesTimestampedDir(t *testing.T) {
 	t.Chdir(tmp)
 
 	har := harWith(entryJSON("2024-01-01T00:00:00.001Z", "GET", srv.URL+"/f.txt"))
-	if err := Fetch(NewReader(strings.NewReader(har))); err != nil {
+	if err := Fetch(t.Context(), strings.NewReader(har), FetchOptions{}); err != nil {
 		t.Fatalf("Fetch() error = %v", err)
 	}
 
@@ -55,7 +59,7 @@ func TestFetchCreatesTimestampedDir(t *testing.T) {
 
 func TestFetchMalformedJSONReturnsError(t *testing.T) {
 	t.Chdir(t.TempDir())
-	if err := Fetch(NewReader(strings.NewReader(`{"log":{ BROKEN`))); err == nil {
+	if err := Fetch(t.Context(), strings.NewReader(`{"log":{ BROKEN`), FetchOptions{}); err == nil {
 		t.Error("Fetch() error = nil, want non-nil for malformed JSON")
 	}
 }

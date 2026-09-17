@@ -6,8 +6,168 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The module path is now `github.com/mrichman/hargo/v2`.** v1 was published as
+  `v1.0.1` in 2021, and because `v0.2.0` sorts below it, everything released
+  afterwards was invisible to `go get`. The `/v2` suffix makes the current code
+  resolvable. See [MIGRATING.md](MIGRATING.md) for the upgrade path; the command
+  line interface is unaffected.
+- Every entry point takes a `context.Context` as its first argument. Cancelling
+  it stops the work, including while `Run` is waiting out a recorded delay and
+  while `ReadStream` is blocked delivering an entry.
+- Every entry point takes an `io.Reader` rather than a `*bufio.Reader`, and
+  `ReadStream` takes an `io.ReadSeeker` rather than an `*os.File`. The byte order
+  mark is skipped internally, so calling `NewReader` first is no longer required.
+- The library no longer writes to stdout and no longer logs. `RunOptions`,
+  `FetchOptions`, and `LoadTestOptions` carry an optional `Logger` and
+  `Progress` writer; leaving either nil discards that output. `logrus` is
+  replaced by the standard library's `log/slog` and is no longer a dependency.
+- `LoadTest`'s seven positional parameters are replaced by `LoadTestOptions`,
+  whose `InfluxDBURL` is a `*url.URL` where nil means "do not record".
+- `Run` and `RunWithOptions` are merged into `Run`; `Fetch` and `FetchTo` are
+  merged into `Fetch`, whose output directory is `FetchOptions.OutDir`.
+- `EntryToRequest` takes an `EntryOptions` instead of a boolean, and the request
+  it returns is bound to the caller's context.
+- `Validate` returns only an error; the `bool` duplicated what the error already
+  conveyed.
+- `Dump` returns an error instead of logging one, and `ReadStream` returns an
+  error instead of logging and closing silently.
+- `Har`, `HarVersion`, `IgnoreHarCookies`, and `HarFile` are renamed to `HAR`,
+  `HARVersion`, `IgnoreHARCookies`, and `HARFile`, since HAR is an initialism.
+- An unreachable InfluxDB now fails a load test up front instead of replaying
+  the entire HAR and discarding every result.
+- A load test that ends because its duration elapsed, or because its context was
+  cancelled, returns nil rather than an error.
+- The CLI logs the command it is about to run at debug level rather than info,
+  so ordinary runs print only their results. Diagnostics go to stderr, keeping
+  `hargo dump` and `hargo curl` safe to pipe.
+- `Ctrl-C` and `SIGTERM` now cancel the running command's context, unwinding a
+  replay, fetch, or load test cleanly instead of killing it mid-request.
+
+### Added
+
+- `LoadTestOptions.Results`, an optional channel that receives every
+  `TestResult`, so callers can collect results without running InfluxDB.
+- `FetchOptions.AcceptErrorStatus`, which saves the response body even when the
+  server reported an error status.
+- `ParseEntryTime`, which parses a HAR `startedDateTime` across the formats real
+  recorders emit.
+- `MIGRATING.md`, a v1-to-v2 upgrade guide whose every example is compiled
+  against the real API.
+- A `justfile` mirroring every Makefile target, for [just](https://just.systems/).
+
+### Removed
+
+- `WritePoint`, `queryDB`, and `newInfluxDBClient` are unexported. They shared a
+  package-level `var db string` written by one and read by the others, which was
+  unsafe with more than one destination in a process.
+- `RunWithOptions` and `FetchTo`, folded into `Run` and `Fetch`.
+
 ### Fixed
 
+- `Run` no longer sleeps for centuries. `startedDateTime` was parsed with the
+  single layout `2006-01-02T15:04:05.000Z`, which rejects the HAR spec's own
+  example (`2009-07-24T19:20:30.45+01:00`), any number of fractional digits other
+  than three, a missing fractional part, and an absent value. The error was
+  discarded, so the entry became the zero time and the gap to the next entry
+  saturated at roughly 292 years, which the replay then waited out. Timestamps are
+  now parsed liberally, a failure is reported rather than silently producing no
+  pacing at all, and an unparseable entry no longer poisons its successor's delay.
+- `Entry` timings now decode. The field was tagged `pageTimings`, but the HAR spec
+  names an entry's field `timings` and reserves `pageTimings` for a page, so entry
+  timings were always zero. The wrong tag also masked a second defect: the fields
+  were `int` while HAR timings are fractional, so correcting the tag alone made
+  both checked-in fixtures fail to decode. Both are fixed together.
+- `Cookie.Comment` is a `string` rather than a `bool`, so a spec-legal cookie
+  comment no longer makes `Decode` and `Validate` reject the entire file.
+- `Request.HeadersSize` is tagged `headersSize`, matching the specification and the
+  response field; it was `headerSize` and so never decoded.
+- `ToCurl` emits a valid command line. `-b` and `-H` each appended a trailing
+  space and `-d` relied on that, so an entry with a body and no other flags
+  produced `curl -X POST-d ...`, which curl reads as the method `POST-d`.
+  Arguments are now joined rather than each branch appending a separator.
+- `ToCurl` separates cookies with `"; "` as RFC 6265 requires, instead of `&`,
+  which made a server read them as one cookie with an embedded value. Cookie names
+  and values are no longer URL-encoded, so a space is not turned into `+` and a
+  base64 or JSON value is not mangled.
+- `ToCurl` shell-escapes the request method, which was the one HAR-controlled
+  value reaching the shell unquoted.
+- `ToCurl` derives `Content-Type` from `postData.mimeType` when the HAR records no
+  such header, so curl no longer defaults a JSON body to form encoding.
+- `Fetch` treats a 4xx or 5xx response as a failed download rather than saving the
+  error page under the resource's own name and reporting success. `FetchOptions`
+  gains `AcceptErrorStatus` for callers who want the previous behaviour.
+- `Fetch` sends the recorded request body; it built every request with a nil body,
+  so a recorded POST or PUT replayed empty.
+- `Fetch` decodes a `Content-Encoding: deflate` body as zlib, which is what RFC
+  9110 defines, falling back to raw deflate for servers that send it.
+- A URL path can no longer name anything but a single file inside the output
+  directory. `path.Base` only splits on forward slashes, so a backslash-separated
+  path survived it and `filepath.Join` then interpreted it as directories on
+  Windows. Names are also length-clamped and stripped of characters that would be
+  rejected by the filesystem, which previously lost the resource outright.
+- `Validate` rejects trailing data after the JSON document, reports a missing
+  `log` object as such rather than as `unsupported HAR version ""`, requires an
+  entries array, and checks that every entry has a parseable `startedDateTime` and
+  a request with a method and a usable URL. It previously checked only that the
+  bytes fitted the Go structs and that the version was `1.2`.
+- `Decode` orders entries chronologically by parsed time rather than by raw string
+  comparison, which disagreed whenever timestamps used different UTC offsets, and
+  the sort is now stable so entries recorded in the same instant keep their order.
+- `EntryToRequest` applies a recorded `Host` header, and an HTTP/2 `:authority`
+  when there is none, by setting `Request.Host`. Adding it to the header map, as
+  before, has no effect in `net/http`, so the recorded virtual host was lost.
+- `EntryToRequest` derives `Content-Type` from `postData.mimeType` when the HAR
+  records no such header.
+- `postBody` prefers the recorded text over reconstructing params, and only
+  URL-encodes params for a form body. Encoding a `multipart/form-data` body
+  produced something that contradicted the recorded `Content-Type`.
+- `isWebSocket` is case-insensitive, so a `WS://` entry is dropped rather than
+  surviving the filter and failing later as an unsupported protocol scheme.
+- `ReadStream` finds the log's own `entries` array. The scan matched any string
+  token equal to `"entries"`, key or value, so a HAR containing something like
+  `{"comment":"entries"}` or a nested key of that name failed the whole run with a
+  misleading decode error.
+- Every InfluxDB request is bounded by a timeout. The client defaults to none, and
+  `Ping`'s argument is a `wait_for_leader` query parameter rather than a client
+  timeout, so a stalled server could hang a load test indefinitely — after its
+  workers had already stopped, because the consumer goroutine `LoadTest` joins on
+  was the one blocked.
+- Results are recorded with nanosecond precision and tagged by method, status, HAR
+  file, and outcome. With millisecond precision and no tags, a point's identity
+  collided for concurrent results and all but one were silently discarded.
+- `StartTime` and `EndTime` are stored as Unix nanoseconds. As `time.Time` values
+  they fell through to `%v` formatting, which includes the monotonic clock reading
+  and is not queryable as a time. Points are also timestamped when the request
+  started rather than when they happened to be recorded.
+- Credentials in the InfluxDB URL are used to authenticate instead of being
+  discarded, and the database name is validated as an identifier before being
+  interpolated into InfluxQL.
+- Establishing the InfluxDB connection uses its own deadline, so setup neither
+  consumes the test's duration budget nor reports a connection failure as the
+  test's deadline expiring.
+- `LoadTest` serializes writes to `Progress`. Every worker was handed the caller's
+  writer directly, which `os.Stdout` tolerates but a `bytes.Buffer` does not.
+- `LoadTest` drains each response body before closing it. Closing an undrained
+  body tears the connection down in `net/http`, so every request paid a fresh TCP
+  and TLS handshake despite keep-alive being configured; `Latency` also now covers
+  receiving the whole response rather than just the headers.
+- Each worker's `http.Transport` sets an idle timeout and releases its connections
+  when the worker exits. A hand-built transport has no idle expiry, so sockets
+  were held until the process exited.
+- `--debug` is accepted before or after the subcommand. urfave/cli v1 only
+  reorders a command's own flags, so `hargo validate --debug f.har` failed with
+  `flag provided but not defined`, and `hargo fetch f.har --debug` silently used
+  `--debug` as the output directory and downloaded into a directory of that name.
+- The redirect policy no longer rewrites `URL.Opaque` to the decoded path, which
+  emitted a malformed request line for any redirect target containing an escape
+  such as `%20`.
+- Connecting to InfluxDB no longer loops forever when the server answers `/ping`
+  without reporting a version. The retry counted only failed attempts, so a
+  successful-but-versionless probe advanced neither the counter nor the loop.
+- `ReadStream` no longer leaks a goroutine blocked on a channel send when the
+  consumer stops reading; the send observes cancellation.
 - `Decode` no longer panics with an index-out-of-range when a HAR contains more
   than one trailing `ws://` entry. The WebSocket filter now filters in place
   instead of swap-deleting while ranging the original slice, and `wss://`

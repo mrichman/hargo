@@ -23,8 +23,8 @@ func TestFetchToDownloadsEntries(t *testing.T) {
 		entryJSON("2024-01-01T00:00:00.001Z", "GET", srv.URL+"/app.js") + "," +
 			entryJSON("2024-01-01T00:00:00.002Z", "GET", srv.URL+"/style.css"))
 
-	if err := FetchTo(NewReader(strings.NewReader(har)), outdir); err != nil {
-		t.Fatalf("FetchTo() error = %v", err)
+	if err := Fetch(t.Context(), strings.NewReader(har), FetchOptions{OutDir: outdir}); err != nil {
+		t.Fatalf("Fetch() error = %v", err)
 	}
 
 	for name, want := range map[string]string{
@@ -52,8 +52,8 @@ func TestFetchToCreatesOutputDir(t *testing.T) {
 	outdir := filepath.Join(t.TempDir(), "a", "b", "c")
 	har := harWith(entryJSON("2024-01-01T00:00:00.001Z", "GET", srv.URL+"/f.txt"))
 
-	if err := FetchTo(NewReader(strings.NewReader(har)), outdir); err != nil {
-		t.Fatalf("FetchTo() error = %v", err)
+	if err := Fetch(t.Context(), strings.NewReader(har), FetchOptions{OutDir: outdir}); err != nil {
+		t.Fatalf("Fetch() error = %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(outdir, "f.txt")); err != nil {
 		t.Errorf("expected f.txt in %s: %v", outdir, err)
@@ -79,8 +79,8 @@ func TestFetchToRootPathBecomesIndexHTML(t *testing.T) {
 			outdir := filepath.Join(t.TempDir(), "out")
 			har := harWith(entryJSON("2024-01-01T00:00:00.001Z", "GET", tt.url))
 
-			if err := FetchTo(NewReader(strings.NewReader(har)), outdir); err != nil {
-				t.Fatalf("FetchTo() error = %v", err)
+			if err := Fetch(t.Context(), strings.NewReader(har), FetchOptions{OutDir: outdir}); err != nil {
+				t.Fatalf("Fetch() error = %v", err)
 			}
 			got, err := os.ReadFile(filepath.Join(outdir, "index.html"))
 			if err != nil {
@@ -95,8 +95,8 @@ func TestFetchToRootPathBecomesIndexHTML(t *testing.T) {
 
 func TestFetchToMalformedJSONReturnsError(t *testing.T) {
 	outdir := filepath.Join(t.TempDir(), "out")
-	if err := FetchTo(NewReader(strings.NewReader(`{"log":{ BROKEN`)), outdir); err == nil {
-		t.Error("FetchTo() error = nil, want non-nil for malformed JSON")
+	if err := Fetch(t.Context(), strings.NewReader(`{"log":{ BROKEN`), FetchOptions{OutDir: outdir}); err == nil {
+		t.Error("Fetch() error = nil, want non-nil for malformed JSON")
 	}
 }
 
@@ -105,8 +105,8 @@ func TestFetchToPropagatesRequestFailure(t *testing.T) {
 	// Port 0 is never listening.
 	har := harWith(entryJSON("2024-01-01T00:00:00.001Z", "GET", "http://127.0.0.1:0/dead"))
 
-	if err := FetchTo(NewReader(strings.NewReader(har)), outdir); err == nil {
-		t.Error("FetchTo() error = nil, want non-nil when the request cannot be made")
+	if err := Fetch(t.Context(), strings.NewReader(har), FetchOptions{OutDir: outdir}); err == nil {
+		t.Error("Fetch() error = nil, want non-nil when the request cannot be made")
 	}
 }
 
@@ -123,12 +123,12 @@ func TestFetchToSkipsUnbuildableEntry(t *testing.T) {
 		entryJSON("2024-01-01T00:00:00.001Z", "BAD METHOD", srv.URL+"/skipped") + "," +
 			entryJSON("2024-01-01T00:00:00.002Z", "GET", srv.URL+"/kept.txt"))
 
-	err := FetchTo(NewReader(strings.NewReader(har)), outdir)
+	err := Fetch(t.Context(), strings.NewReader(har), FetchOptions{OutDir: outdir})
 	if err == nil {
-		t.Fatal("FetchTo() error = nil, want non-nil: one entry could not be built")
+		t.Fatal("Fetch() error = nil, want non-nil: one entry could not be built")
 	}
 	if !strings.Contains(err.Error(), "1 of 2 entries failed") {
-		t.Errorf("FetchTo() error = %q, want it to report 1 of 2 failures", err)
+		t.Errorf("Fetch() error = %q, want it to report 1 of 2 failures", err)
 	}
 	if _, err := os.Stat(filepath.Join(outdir, "kept.txt")); err != nil {
 		t.Errorf("expected kept.txt to be downloaded: %v", err)
@@ -151,12 +151,12 @@ func TestFetchToContinuesAfterDownloadFailure(t *testing.T) {
 			entryJSON("2024-01-01T00:00:00.002Z", "GET", "http://127.0.0.1:0/dead.txt") + "," +
 			entryJSON("2024-01-01T00:00:00.003Z", "GET", srv.URL+"/third.txt"))
 
-	err := FetchTo(NewReader(strings.NewReader(har)), outdir)
+	err := Fetch(t.Context(), strings.NewReader(har), FetchOptions{OutDir: outdir})
 	if err == nil {
-		t.Fatal("FetchTo() error = nil, want non-nil")
+		t.Fatal("Fetch() error = nil, want non-nil")
 	}
 	if !strings.Contains(err.Error(), "1 of 3 entries failed") {
-		t.Errorf("FetchTo() error = %q, want it to report 1 of 3 failures", err)
+		t.Errorf("Fetch() error = %q, want it to report 1 of 3 failures", err)
 	}
 
 	// Crucially, the entry *after* the failure must still have downloaded.
@@ -192,8 +192,8 @@ func TestFetchToUniqueNamesOnBasenameCollision(t *testing.T) {
 			entryJSON("2024-01-01T00:00:00.002Z", "GET", srv.URL+"/b/logo.png") + "," +
 			entryJSON("2024-01-01T00:00:00.003Z", "GET", srv.URL+"/c/logo.png"))
 
-	if err := FetchTo(NewReader(strings.NewReader(har)), outdir); err != nil {
-		t.Fatalf("FetchTo() error = %v", err)
+	if err := Fetch(t.Context(), strings.NewReader(har), FetchOptions{OutDir: outdir}); err != nil {
+		t.Fatalf("Fetch() error = %v", err)
 	}
 
 	entries, err := os.ReadDir(outdir)
@@ -246,8 +246,8 @@ func TestFetchToDecompressesGzip(t *testing.T) {
 		"request":{"method":"GET","url":"` + srv.URL + `/page.html","httpVersion":"HTTP/1.1",
 		"headers":[{"name":"accept-encoding","value":"gzip, deflate, br"}]}}]}}`
 
-	if err := FetchTo(NewReader(strings.NewReader(har)), outdir); err != nil {
-		t.Fatalf("FetchTo() error = %v", err)
+	if err := Fetch(t.Context(), strings.NewReader(har), FetchOptions{OutDir: outdir}); err != nil {
+		t.Fatalf("Fetch() error = %v", err)
 	}
 
 	got, err := os.ReadFile(filepath.Join(outdir, "page.html"))
@@ -282,8 +282,8 @@ func TestFetchToDecompressesDeflate(t *testing.T) {
 	outdir := filepath.Join(t.TempDir(), "out")
 	har := harWith(entryJSON("2024-01-01T00:00:00.001Z", "GET", srv.URL+"/data.txt"))
 
-	if err := FetchTo(NewReader(strings.NewReader(har)), outdir); err != nil {
-		t.Fatalf("FetchTo() error = %v", err)
+	if err := Fetch(t.Context(), strings.NewReader(har), FetchOptions{OutDir: outdir}); err != nil {
+		t.Fatalf("Fetch() error = %v", err)
 	}
 
 	got, err := os.ReadFile(filepath.Join(outdir, "data.txt"))
@@ -300,8 +300,8 @@ func TestFetchToLeavesNoEmptyFileOnFailure(t *testing.T) {
 	outdir := filepath.Join(t.TempDir(), "out")
 	har := harWith(entryJSON("2024-01-01T00:00:00.001Z", "GET", "http://127.0.0.1:0/dead.js"))
 
-	if err := FetchTo(NewReader(strings.NewReader(har)), outdir); err == nil {
-		t.Fatal("FetchTo() error = nil, want non-nil")
+	if err := Fetch(t.Context(), strings.NewReader(har), FetchOptions{OutDir: outdir}); err == nil {
+		t.Fatal("Fetch() error = nil, want non-nil")
 	}
 
 	entries, err := os.ReadDir(outdir)

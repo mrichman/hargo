@@ -22,12 +22,9 @@ func TestValidateMalformedInputReturnsErrorNotExit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ok, err := Validate(NewReader(strings.NewReader(tt.input)))
+			err := Validate(strings.NewReader(tt.input))
 			if err == nil {
 				t.Fatal("Validate() error = nil, want non-nil")
-			}
-			if ok {
-				t.Error("Validate() ok = true, want false")
 			}
 			if !strings.Contains(err.Error(), "HAR") {
 				t.Errorf("error should mention HAR, got %q", err)
@@ -37,13 +34,9 @@ func TestValidateMalformedInputReturnsErrorNotExit(t *testing.T) {
 }
 
 func TestValidateAcceptsVersion12(t *testing.T) {
-	ok, err := Validate(NewReader(strings.NewReader(harWith(
-		entryJSON("2024-01-01T00:00:01.000Z", "GET", "http://example.com/a")))))
-	if err != nil {
+	if err := Validate(strings.NewReader(harWith(
+		entryJSON("2024-01-01T00:00:01.000Z", "GET", "http://example.com/a")))); err != nil {
 		t.Fatalf("Validate() error = %v", err)
-	}
-	if !ok {
-		t.Error("Validate() ok = false, want true")
 	}
 }
 
@@ -53,10 +46,7 @@ func TestValidateRejectsUnsupportedVersion(t *testing.T) {
 	for _, version := range []string{"1.1", "1.0", "2.0", ""} {
 		t.Run("version "+version, func(t *testing.T) {
 			in := `{"log":{"version":"` + version + `","entries":[]}}`
-			ok, err := Validate(NewReader(strings.NewReader(in)))
-			if ok {
-				t.Error("Validate() ok = true, want false")
-			}
+			err := Validate(strings.NewReader(in))
 			if err == nil {
 				t.Fatal("Validate() error = nil, want non-nil for unsupported version")
 			}
@@ -67,15 +57,11 @@ func TestValidateRejectsUnsupportedVersion(t *testing.T) {
 	}
 }
 
-func TestValidateRealHarFixtures(t *testing.T) {
-	for _, name := range []string{"test/golang.org.har", "test/en.wikipedia.org.har"} {
+func TestValidateRealHARFixtures(t *testing.T) {
+	for _, name := range []string{"testdata/golang.org.har", "testdata/en.wikipedia.org.har"} {
 		t.Run(name, func(t *testing.T) {
-			ok, err := Validate(NewReader(openFixture(t, name)))
-			if err != nil {
+			if err := Validate(openFixture(t, name)); err != nil {
 				t.Fatalf("Validate(%s) error = %v", name, err)
-			}
-			if !ok {
-				t.Errorf("Validate(%s) ok = false, want true", name)
 			}
 		})
 	}
@@ -83,11 +69,7 @@ func TestValidateRealHarFixtures(t *testing.T) {
 
 func TestValidateSkipsBOM(t *testing.T) {
 	in := "\xef\xbb\xbf" + harWith("")
-	ok, err := Validate(NewReader(strings.NewReader(in)))
-	if err != nil {
-		t.Fatalf("Validate() error = %v", err)
-	}
-	if !ok {
-		t.Error("Validate() ok = false, want true for a BOM-prefixed HAR")
+	if err := Validate(strings.NewReader(in)); err != nil {
+		t.Fatalf("Validate() error = %v, want nil for a BOM-prefixed HAR", err)
 	}
 }

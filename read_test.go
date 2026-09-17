@@ -1,15 +1,16 @@
 package hargo
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
 
-// writeTempHar writes content to a temp file and returns the open *os.File,
-// since ReadStream needs a seekable file rather than an io.Reader.
-func writeTempHar(t *testing.T, content string) *os.File {
+// writeTempHAR writes content to a temp file and returns the open *os.File,
+// since ReadStream needs a seekable reader rather than a plain io.Reader.
+func writeTempHAR(t *testing.T, content string) *os.File {
 	t.Helper()
 
 	p := filepath.Join(t.TempDir(), "test.har")
@@ -25,23 +26,23 @@ func writeTempHar(t *testing.T, content string) *os.File {
 }
 
 func TestReadStreamDeliversEntries(t *testing.T) {
-	f := writeTempHar(t, harWith(
+	f := writeTempHAR(t, harWith(
 		entryJSON("2024-01-01T00:00:00.001Z", "GET", "http://example.com/a")+","+
 			entryJSON("2024-01-01T00:00:00.002Z", "GET", "http://example.com/b")))
 
 	entries := make(chan Entry, 8)
-	stop := make(chan bool)
+	ctx, cancel := context.WithCancel(t.Context())
 
-	go ReadStream(f, entries, stop)
+	go func() { _ = ReadStream(ctx, f, entries, nil) }()
 
 	first := <-entries
 	if first.Request.URL != "http://example.com/a" {
 		t.Errorf("first entry URL = %q, want http://example.com/a", first.Request.URL)
 	}
 
-	// ReadStream checks stop only after handing over an entry, so signalling
-	// here terminates it on the next iteration.
-	close(stop)
+	// Cancelling terminates the stream; it is observed both between entries and
+	// while blocked on a send.
+	cancel()
 
 	// Drain until the producer closes the channel.
 	drained := 1
@@ -57,23 +58,24 @@ func TestReadStreamDeliversEntries(t *testing.T) {
 			}
 			drained++
 		case <-timeout:
-			t.Fatal("ReadStream did not close the entries channel after stop")
+			t.Fatal("ReadStream did not close the entries channel after cancellation")
 		}
 	}
 }
 
 func TestReadStreamLoopsOverFile(t *testing.T) {
-	f := writeTempHar(t, harWith(
+	f := writeTempHAR(t, harWith(
 		entryJSON("2024-01-01T00:00:00.001Z", "GET", "http://example.com/only")))
 
 	entries := make(chan Entry, 64)
-	stop := make(chan bool)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
-	go ReadStream(f, entries, stop)
+	go func() { _ = ReadStream(ctx, f, entries, nil) }()
 
 	// The single entry should be replayed repeatedly as the reader seeks back
 	// to the start of the file.
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		select {
 		case e := <-entries:
 			if e.Request.URL != "http://example.com/only" {
@@ -83,7 +85,32 @@ func TestReadStreamLoopsOverFile(t *testing.T) {
 			t.Fatalf("timed out waiting for entry %d", i)
 		}
 	}
-	close(stop)
+}
+
+// Cancellation must be observed even when nothing is reading the channel, or the
+// goroutine leaks blocked on a send.
+func TestReadStreamReturnsWhenNobodyIsReading(t *testing.T) {
+	f := writeTempHAR(t, harWith(
+		entryJSON("2024-01-01T00:00:00.001Z", "GET", "http://example.com/a")+","+
+			entryJSON("2024-01-01T00:00:00.002Z", "GET", "http://example.com/b")))
+
+	// Unbuffered, and never read from, so ReadStream blocks on its first send.
+	entries := make(chan Entry)
+	ctx, cancel := context.WithCancel(t.Context())
+
+	done := make(chan error, 1)
+	go func() { done <- ReadStream(ctx, f, entries, nil) }()
+
+	cancel()
+
+	select {
+	case err := <-done:
+		if !isDone(err) {
+			t.Errorf("ReadStream() error = %v, want a context error", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("ReadStream did not return while blocked on a send")
+	}
 }
 
 // Regression: ReadStream called log.Fatal on a malformed file, terminating the
@@ -92,32 +119,33 @@ func TestReadStreamMalformedInputDoesNotExit(t *testing.T) {
 	tests := []struct {
 		name    string
 		content string
+		wantErr bool
 	}{
-		{name: "no entries key", content: `{"log":{"version":"1.2"}}`},
+		{name: "no entries key", content: `{"log":{"version":"1.2"}}`, wantErr: true},
 		{name: "entries not an array", content: `{"log":{"version":"1.2","entries":42}}`},
-		{name: "truncated entry", content: `{"log":{"version":"1.2","entries":[{"request":`},
-		{name: "empty file", content: ``},
-		{name: "not json", content: `hello world`},
+		{name: "truncated entry", content: `{"log":{"version":"1.2","entries":[{"request":`, wantErr: true},
+		{name: "empty file", content: ``, wantErr: true},
+		{name: "not json", content: `hello world`, wantErr: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := writeTempHar(t, tt.content)
+			f := writeTempHAR(t, tt.content)
 			entries := make(chan Entry, 8)
-			stop := make(chan bool)
-			defer close(stop)
 
-			done := make(chan struct{})
-			go func() {
-				defer close(done)
-				ReadStream(f, entries, stop)
-			}()
+			done := make(chan error, 1)
+			go func() { done <- ReadStream(t.Context(), f, entries, nil) }()
 
 			// The channel must be closed rather than the process killed.
+			var err error
 			select {
-			case <-done:
+			case err = <-done:
 			case <-time.After(5 * time.Second):
 				t.Fatal("ReadStream did not return on malformed input")
+			}
+
+			if tt.wantErr && err == nil {
+				t.Error("ReadStream() error = nil, want non-nil for malformed input")
 			}
 
 			select {
@@ -140,14 +168,15 @@ func TestReadStreamSkipsEntriesWithoutURL(t *testing.T) {
 		{"startedDateTime":"2024-01-01T00:00:00.003Z","request":{"method":"GET","url":"http://example.com/c"}}
 	]}}`
 
-	f := writeTempHar(t, content)
+	f := writeTempHAR(t, content)
 	entries := make(chan Entry, 8)
-	stop := make(chan bool)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
-	go ReadStream(f, entries, stop)
+	go func() { _ = ReadStream(ctx, f, entries, nil) }()
 
 	var got []string
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case e := <-entries:
 			got = append(got, e.Request.URL)
@@ -155,7 +184,6 @@ func TestReadStreamSkipsEntriesWithoutURL(t *testing.T) {
 			t.Fatal("timed out")
 		}
 	}
-	close(stop)
 
 	want := []string{"http://example.com/a", "http://example.com/c"}
 	for i, w := range want {

@@ -91,6 +91,9 @@ node_modules
 .idea/*
 *.iml
 
+## Cortex Code local workspace state
+.snowflake/
+
 *.exe
 *.test
 *.prof

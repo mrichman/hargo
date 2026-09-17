@@ -45,6 +45,20 @@ Or individually:
 `make lint` needs [golangci-lint](https://golangci-lint.run/welcome/install/)
 on your `PATH`. Everything else uses only the Go toolchain.
 
+### just
+
+A [justfile](justfile) mirrors every target above, if you prefer
+[just](https://just.systems/):
+
+```sh
+just           # list the recipes
+just check     # the same aggregate check
+just fuzz 2m   # a recipe argument rather than FUZZTIME=2m
+```
+
+`just build` produces a binary byte-for-byte identical to `make build`. Both
+files are maintained together, so a change to one belongs in the other.
+
 ## Releasing
 
 Releases are built by [goreleaser](https://goreleaser.com/) from
@@ -75,7 +89,7 @@ config is caught long before tag time.
 Please include a test with any bug fix, written so it fails before your change.
 The suite uses only the standard library: table-driven tests plus
 `net/http/httptest` for anything that makes requests. Small inline HAR literals
-are preferred over the fixtures in `test/` for edge cases, since they keep the
+are preferred over the fixtures in `testdata/` for edge cases, since they keep the
 expected behaviour visible in the test.
 
 If you touch HAR parsing, run `make fuzz` as well.

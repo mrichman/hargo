@@ -2,7 +2,7 @@
 
 # <img src="./img/hargo-logo.png" height="40"> Hargo
 
-[![CI](https://github.com/mrichman/hargo/actions/workflows/ci.yml/badge.svg)](https://github.com/mrichman/hargo/actions/workflows/ci.yml)&nbsp;[![Go Reference](https://pkg.go.dev/badge/github.com/mrichman/hargo.svg)](https://pkg.go.dev/github.com/mrichman/hargo) [![Go Report Card](https://goreportcard.com/badge/github.com/mrichman/hargo)](https://goreportcard.com/report/github.com/mrichman/hargo) [![GitHub license](https://img.shields.io/github/license/mrichman/hargo.svg)](https://github.com/mrichman/hargo/blob/master/LICENSE)
+[![CI](https://github.com/mrichman/hargo/actions/workflows/ci.yml/badge.svg)](https://github.com/mrichman/hargo/actions/workflows/ci.yml)&nbsp;[![Go Reference](https://pkg.go.dev/badge/github.com/mrichman/hargo/v2.svg)](https://pkg.go.dev/github.com/mrichman/hargo/v2) [![Go Report Card](https://goreportcard.com/badge/github.com/mrichman/hargo/v2)](https://goreportcard.com/report/github.com/mrichman/hargo/v2) [![GitHub license](https://img.shields.io/github/license/mrichman/hargo.svg)](https://github.com/mrichman/hargo/blob/master/LICENSE)
  [![GitHub issues](https://img.shields.io/github/issues/mrichman/hargo.svg)](https://github.com/mrichman/hargo/issues) [![Twitter](https://img.shields.io/twitter/url/https/github.com/mrichman/hargo.svg?style=plastic)](https://twitter.com/intent/tweet?text=Wow:&url=https%3A%2F%2Fgithub.com%2Fmrichman%2Fhargo)
 
 Hargo parses [HAR](https://en.wikipedia.org/wiki/.har) files, can convert to curl format, and serve as a load test driver.
@@ -38,6 +38,40 @@ COPYRIGHT:
    (c) 2024 Mark A. Richman
 ```
 
+## Installing
+
+```sh
+go install github.com/mrichman/hargo/v2/cmd/hargo@latest
+```
+
+Note the `/v2` suffix: it is part of the module path, so omitting it installs
+the much older v1 release.
+
+To use hargo as a library:
+
+```sh
+go get github.com/mrichman/hargo/v2
+```
+
+```go
+import "github.com/mrichman/hargo/v2"
+```
+
+Every entry point reads from an `io.Reader`, the operations that do network I/O
+take a `context.Context`, and the library writes nothing and logs nothing unless
+you ask it to:
+
+```go
+// Replay a HAR, printing progress and logging skipped entries.
+err := hargo.Run(ctx, f, hargo.RunOptions{
+	NoWait:   true,
+	Logger:   slog.Default(),
+	Progress: os.Stdout,
+})
+```
+
+Upgrading from v1? See [MIGRATING.md](MIGRATING.md).
+
 ## Building and Running Hargo
 
 Hargo requires Go 1.27.1 or newer.
@@ -46,11 +80,13 @@ Hargo requires Go 1.27.1 or newer.
 git clone https://github.com/mrichman/hargo.git
 cd hargo
 make install
-hargo validate test/golang.org.har
+hargo validate testdata/golang.org.har
 ```
 
 Run `make help` to see every target, or `make check` to run the same checks CI
-runs. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
+runs. A [justfile](justfile) mirrors every target if you prefer
+[just](https://just.systems/) — run `just` to list the recipes. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
 
 ## About HAR Files
 
@@ -143,7 +179,7 @@ docker build -t hargo .
 ### Run container
 
 ```docker
-docker run --rm -v `pwd`/test:/test hargo hargo run /test/golang.org.har
+docker run --rm -v `pwd`/testdata:/testdata hargo hargo run /testdata/golang.org.har
 ```
 
 ## Docker-compose

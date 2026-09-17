@@ -5,17 +5,21 @@
 // several ways to work with it:
 //
 //   - [Validate] checks that the input parses and declares a supported version.
-//   - [Decode] parses a HAR into a [Har] value, dropping WebSocket entries and
+//   - [Decode] parses a HAR into a [HAR] value, dropping WebSocket entries and
 //     ordering the remainder by start time.
 //   - [Dump] and [DumpTo] print a human-readable summary of every entry.
 //   - [ToCurl] converts each entry into an equivalent curl command line.
 //   - [Run] replays every entry in sequence, honouring the recorded delays.
-//   - [Fetch] and [FetchTo] download every referenced resource to disk.
-//   - [LoadTest] replays entries concurrently for a fixed duration, optionally
-//     recording results to InfluxDB.
+//   - [Fetch] downloads every referenced resource to disk.
+//   - [LoadTest] replays entries concurrently, optionally recording results to
+//     InfluxDB.
 //
-// Functions taking a *bufio.Reader expect one produced by [NewReader], which
-// strips a leading UTF-8 byte order mark if present.
+// Every entry point takes an [io.Reader] and skips a leading UTF-8 byte order
+// mark if one is present.
+//
+// This package writes nothing and logs nothing by default. The operations that
+// can report progress take an options struct with a Logger and a Progress
+// writer; leaving either nil discards that output.
 package hargo
 
 import "time"
@@ -25,8 +29,8 @@ HTTP Archive (HAR) format
 https://w3c.github.io/web-performance/specs/HAR/Overview.html
 */
 
-// Har is a container type for deserialization
-type Har struct {
+// HAR is a container type for deserialization.
+type HAR struct {
 	Log Log `json:"log"`
 }
 
@@ -57,7 +61,7 @@ type Log struct {
 	Comment string `json:"comment"`
 }
 
-// Creator contains information about the log creator application
+// Creator contains information about the log creator application.
 type Creator struct {
 	// Required. The name of the application that created the log.
 	Name string `json:"name"`
@@ -67,7 +71,7 @@ type Creator struct {
 	Comment string `json:"comment,omitempty"`
 }
 
-// Browser that created the log
+// Browser that created the log.
 type Browser struct {
 	// Required. The name of the browser that created the log.
 	Name string `json:"name"`
@@ -95,24 +99,26 @@ type Page struct {
 	// Page title.
 	Title string `json:"title"`
 	// Detailed timing info about page load.
-	PageTiming PageTiming `json:"pageTiming"`
+	PageTimings PageTimings `json:"pageTimings"`
 	// (new in 1.2) A comment provided by the user or the application.
 	Comment string `json:"comment,omitempty"`
 }
 
-// PageTiming describes timings for various events (states) fired during the page load.
+// PageTimings describes timings for various events (states) fired during the page load.
 // All times are specified in milliseconds. If a time info is not available appropriate field is set to -1.
-type PageTiming struct {
+//
+// Values are fractional; recorders emit numbers such as 171.71799996867776.
+type PageTimings struct {
 	// Content of the page loaded. Number of milliseconds since page load started
 	// (page.startedDateTime). Use -1 if the timing does not apply to the current
 	// request.
 	// Depeding on the browser, onContentLoad property represents DOMContentLoad
 	// event or document.readyState == interactive.
-	OnContentLoad int `json:"onContentLoad"`
+	OnContentLoad float64 `json:"onContentLoad"`
 	// Page is loaded (onLoad event fired). Number of milliseconds since page
 	// load started (page.startedDateTime). Use -1 if the timing does not apply
 	// to the current request.
-	OnLoad int `json:"onLoad"`
+	OnLoad float64 `json:"onLoad"`
 	// (new in 1.2) A comment provided by the user or the application.
 	Comment string `json:"comment"`
 }
@@ -126,15 +132,16 @@ type Entry struct {
 	StartedDateTime string `json:"startedDateTime"`
 	// Total elapsed time of the request in milliseconds. This is the sum of all
 	// timings available in the timings object (i.e. not including -1 values) .
-	Time float32 `json:"time"`
+	Time float64 `json:"time"`
 	// Detailed info about the request.
 	Request Request `json:"request"`
 	// Detailed info about the response.
 	Response Response `json:"response"`
 	// Info about cache usage.
 	Cache Cache `json:"cache"`
-	// Detailed timing info about request/response round trip.
-	PageTimings PageTimings `json:"pageTimings"`
+	// Detailed timing info about request/response round trip. The HAR spec names
+	// this field "timings"; "pageTimings" belongs to a page, not an entry.
+	Timings Timings `json:"timings"`
 	// optional (new in 1.2) IP address of the server that was connected
 	// (result of DNS resolution).
 	ServerIPAddress string `json:"serverIPAddress,omitempty"`
@@ -168,7 +175,9 @@ type Request struct {
 	// Total number of bytes from the start of the HTTP request message until
 	// (and including) the double CRLF before the body. Set to -1 if the info
 	// is not available.
-	HeaderSize int `json:"headerSize"`
+	//
+	// The HAR spec names this field "headersSize", matching Response.
+	HeadersSize int `json:"headersSize"`
 	// Size of the request body (POST data payload) in bytes. Set to -1 if the
 	// info is not available.
 	BodySize int `json:"bodySize"`
@@ -227,10 +236,10 @@ type Cookie struct {
 	// otherwise.
 	Secure bool `json:"secure,omitempty"`
 	// optional (new in 1.2) A comment provided by the user or the application.
-	Comment bool `json:"comment,omitempty"`
+	Comment string `json:"comment,omitempty"`
 }
 
-// NVP is simply a name/value pair with a comment
+// NVP is simply a name/value pair with a comment.
 type NVP struct {
 	Name    string `json:"name"`
 	Value   string `json:"value"`
@@ -307,7 +316,7 @@ type Cache struct {
 	Comment string `json:"comment,omitempty"`
 }
 
-// CacheObject is used by both beforeRequest and afterRequest
+// CacheObject is used by both beforeRequest and afterRequest.
 type CacheObject struct {
 	// optional - Expiration time of the cache entry.
 	Expires string `json:"expires,omitempty"`
@@ -321,34 +330,37 @@ type CacheObject struct {
 	Comment string `json:"comment,omitempty"`
 }
 
-// PageTimings describes various phases within request-response round trip.
+// Timings describes various phases within a request-response round trip.
 // All times are specified in milliseconds.
-type PageTimings struct {
-	Blocked int `json:"blocked,omitempty"`
-	// optional - Time spent in a queue waiting for a network connection. Use -1
-	// if the timing does not apply to the current request.
-	DNS int `json:"dns,omitempty"`
+//
+// Values are fractional: recorders routinely emit numbers such as
+// 2.7129996047616007, which cannot be unmarshalled into an integer field.
+type Timings struct {
+	// Time spent in a queue waiting for a network connection. Use -1 if the
+	// timing does not apply to the current request.
+	Blocked float64 `json:"blocked,omitempty"`
 	// optional - DNS resolution time. The time required to resolve a host name.
 	// Use -1 if the timing does not apply to the current request.
-	Connect int `json:"connect,omitempty"`
-	// optional - Time required to create TCP connection. Use -1 if the timing
+	DNS float64 `json:"dns,omitempty"`
+	// optional - Time required to create the TCP connection. Use -1 if the timing
 	// does not apply to the current request.
-	Send int `json:"send"`
-	// Time required to send HTTP request to the server.
-	Wait int `json:"wait"`
+	Connect float64 `json:"connect,omitempty"`
+	// Time required to send the HTTP request to the server.
+	Send float64 `json:"send"`
 	// Waiting for a response from the server.
-	Receive int `json:"receive"`
-	// Time required to read entire response from the server (or cache).
-	Ssl int `json:"ssl,omitempty"`
+	Wait float64 `json:"wait"`
+	// Time required to read the entire response from the server (or cache).
+	Receive float64 `json:"receive"`
 	// optional (new in 1.2) - Time required for SSL/TLS negotiation. If this
 	// field is defined then the time is also included in the connect field (to
 	// ensure backward compatibility with HAR 1.1). Use -1 if the timing does not
 	// apply to the current request.
-	Comment string `json:"comment,omitempty"`
+	Ssl float64 `json:"ssl,omitempty"`
 	// optional (new in 1.2) - A comment provided by the user or the application.
+	Comment string `json:"comment,omitempty"`
 }
 
-// TestResult contains results for an individual HTTP request
+// TestResult contains results for an individual HTTP request.
 type TestResult struct {
 	URL       string    `json:"url"`
 	Status    int       `json:"status"` // 200, 500, etc.
@@ -356,5 +368,5 @@ type TestResult struct {
 	EndTime   time.Time `json:"endTime"`
 	Latency   int       `json:"latency"` // milliseconds
 	Method    string    `json:"method"`
-	HarFile   string    `json:"harfile"`
+	HARFile   string    `json:"harfile"`
 }

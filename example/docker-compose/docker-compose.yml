@@ -3,9 +3,9 @@ services:
     build:
       context: ../../
     image: hargo
-    command: hargo load -u=http://influxdb:8086/hargo /test/golang.org.har
+    command: hargo load -u=http://influxdb:8086/hargo /testdata/golang.org.har
     volumes:
-      - ../../test:/test
+      - ../../testdata:/testdata
     depends_on:
       - influxdb
   influxdb:

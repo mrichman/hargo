@@ -17,11 +17,10 @@
 img
 docs
 
-# Test sources, fixtures, and examples. The README mounts test/ at runtime with
-# -v rather than baking it into the image.
+# Test sources, fixtures, and examples. The README mounts testdata/ at runtime
+# with -v rather than baking it into the image.
 *_test.go
 testdata
-test
 example
 
 # Build and tooling artefacts
@@ -32,3 +31,7 @@ hargo-fetch*
 coverage.out
 *.tidybak
 chronograf-v1.db
+
+# Task runners; the image is built by the Dockerfile, not by these.
+Makefile
+justfile

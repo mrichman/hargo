@@ -1,55 +1,57 @@
 package hargo
 
 import (
-	"bufio"
 	"encoding/json"
-	"net/url"
+	"io"
 	"strings"
 
 	"al.essio.dev/pkg/shellescape"
-	log "github.com/sirupsen/logrus"
 )
 
-// ToCurl converts a HAR Entry to a curl command line
-// curl -X <method> -b "<name=value&name=value...>" -H <name: value> ... -d "<postData>" <url>
-func ToCurl(r *bufio.Reader) (string, error) {
-	dec := json.NewDecoder(r)
-	var har Har
+// ToCurl converts every entry in a HAR document to a curl command line.
+//
+// curl -X <method> -b '<name=value; name=value...>' -H '<name: value>' ... -d '<postData>' <url>.
+func ToCurl(r io.Reader) (string, error) {
+	dec := json.NewDecoder(NewReader(r))
+	var har HAR
 	if err := dec.Decode(&har); err != nil {
-		log.Error(err)
 		return "", err
 	}
 
 	var command string
 
 	for _, entry := range har.Log.Entries {
-		cmd, err := fromEntry(entry)
-		if err != nil {
-			return "", err
-		}
-
-		command += cmd + "\n\n"
+		command += fromEntry(entry) + "\n\n"
 	}
 
 	return command, nil
 }
 
-func fromEntry(entry Entry) (string, error) {
+// fromEntry renders one HAR entry as a curl command line.
+//
+// Arguments are collected and joined with a single space rather than each branch
+// appending its own separator, which is how a missing space used to slip between
+// the method and -d and produce "curl -X POST-d ...".
+func fromEntry(entry Entry) string {
 	// inspired by https://github.com/snoe/harToCurl/blob/master/harToCurl
 
-	command := "curl -X " + entry.Request.Method
+	// Every value that reaches the shell is quoted, including the method: a HAR
+	// is untrusted input, and the output is meant to be pasted into a shell.
+	args := []string{"curl", "-X", shellescape.Quote(entry.Request.Method)}
 
 	if entry.Request.HTTPVersion == "HTTP/1.0" {
-		command += " -0"
+		args = append(args, "-0")
 	}
 
 	var cookies []string
-
-	if len(entry.Request.Cookies) > 0 {
-		for _, cookie := range entry.Request.Cookies {
-			cookies = append(cookies, url.QueryEscape(cookie.Name)+"="+url.QueryEscape(cookie.Value))
-		}
-		command += " -b " + shellescape.Quote(strings.Join(cookies[:], "&")) + " "
+	for _, cookie := range entry.Request.Cookies {
+		// RFC 6265 separates cookie-pairs with "; ", and the recorded value is
+		// emitted as the browser sent it. URL-encoding it here would turn a space
+		// into "+" and percent-encode octets that are legal in a cookie.
+		cookies = append(cookies, cookie.Name+"="+cookie.Value)
+	}
+	if len(cookies) > 0 {
+		args = append(args, "-b", shellescape.Quote(strings.Join(cookies, "; ")))
 	}
 
 	for _, h := range entry.Request.Headers {
@@ -62,16 +64,33 @@ func fromEntry(entry Entry) (string, error) {
 		if len(cookies) > 0 && strings.EqualFold(h.Name, "Cookie") {
 			continue
 		}
-		command += " -H " + shellescape.Quote(h.Name+": "+h.Value) + " "
+		args = append(args, "-H", shellescape.Quote(h.Name+": "+h.Value))
 	}
 
-	// Emit the body for any method that carries one, not just POST, and
-	// fall back to URL-encoded params when the HAR has no raw text.
-	if body := postBody(entry.Request.PostData); len(body) > 0 {
-		command += "-d " + shellescape.Quote(body)
+	// Emit the body for any method that carries one, not just POST.
+	body := postBody(entry.Request.PostData)
+	if len(body) > 0 {
+		args = append(args, "-d", shellescape.Quote(body))
+
+		// Without a Content-Type the server cannot interpret the body, and the
+		// type is recorded on postData rather than always duplicated as a header.
+		if entry.Request.PostData.MimeType != "" && !hasHeader(entry, "Content-Type") {
+			args = append(args, "-H",
+				shellescape.Quote("Content-Type: "+entry.Request.PostData.MimeType))
+		}
 	}
 
-	command += " " + shellescape.Quote(entry.Request.URL)
+	args = append(args, shellescape.Quote(entry.Request.URL))
 
-	return command, nil
+	return strings.Join(args, " ")
+}
+
+// hasHeader reports whether entry records the named request header.
+func hasHeader(entry Entry, name string) bool {
+	for _, h := range entry.Request.Headers {
+		if strings.EqualFold(h.Name, name) {
+			return true
+		}
+	}
+	return false
 }

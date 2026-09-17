@@ -1,7 +1,9 @@
 package hargo
 
 import (
+	"bufio"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -17,10 +19,10 @@ func entryJSON(started, method, rawURL string) string {
 }
 
 func TestDecodeSortsEntriesByStartedDateTime(t *testing.T) {
-	har, err := Decode(NewReader(strings.NewReader(harWith(
+	har, err := Decode(strings.NewReader(harWith(
 		entryJSON("2024-01-01T00:00:03.000Z", "GET", "http://example.com/third") + "," +
 			entryJSON("2024-01-01T00:00:01.000Z", "GET", "http://example.com/first") + "," +
-			entryJSON("2024-01-01T00:00:02.000Z", "GET", "http://example.com/second")))))
+			entryJSON("2024-01-01T00:00:02.000Z", "GET", "http://example.com/second"))))
 	if err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
@@ -91,7 +93,7 @@ func TestDecodeRemovesWebSocketEntries(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			har, err := Decode(NewReader(strings.NewReader(harWith(tt.entries))))
+			har, err := Decode(strings.NewReader(harWith(tt.entries)))
 			if err != nil {
 				t.Fatalf("Decode() error = %v", err)
 			}
@@ -116,13 +118,13 @@ func urls(entries []Entry) []string {
 }
 
 func TestDecodeMalformedJSONReturnsError(t *testing.T) {
-	if _, err := Decode(NewReader(strings.NewReader(`{"log":{ NOT JSON`))); err == nil {
+	if _, err := Decode(strings.NewReader(`{"log":{ NOT JSON`)); err == nil {
 		t.Fatal("Decode() error = nil, want non-nil for malformed JSON")
 	}
 }
 
 func TestDecodeEmptyEntries(t *testing.T) {
-	har, err := Decode(NewReader(strings.NewReader(harWith(""))))
+	har, err := Decode(strings.NewReader(harWith("")))
 	if err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
@@ -154,7 +156,7 @@ func TestEntryToRequestInvalidInputReturnsError(t *testing.T) {
 			e.Request.Method = tt.method
 			e.Request.URL = tt.url
 
-			req, err := EntryToRequest(e, true)
+			req, err := EntryToRequest(t.Context(), e, EntryOptions{IgnoreHARCookies: true})
 			if err == nil {
 				t.Fatalf("EntryToRequest() error = nil, want non-nil (req=%v)", req)
 			}
@@ -176,12 +178,12 @@ func TestEntryToRequestBuildsRequest(t *testing.T) {
 	}
 	e.Request.PostData.Text = `{"k":"v"}`
 
-	req, err := EntryToRequest(e, true)
+	req, err := EntryToRequest(t.Context(), e, EntryOptions{IgnoreHARCookies: true})
 	if err != nil {
 		t.Fatalf("EntryToRequest() error = %v", err)
 	}
 
-	if req.Method != "POST" {
+	if req.Method != http.MethodPost {
 		t.Errorf("Method = %q, want POST", req.Method)
 	}
 	if req.URL.String() != "http://example.com/submit?a=1" {
@@ -217,7 +219,7 @@ func TestEntryToRequestFormEncodesParams(t *testing.T) {
 		{Name: "pass", Value: "s3 cret&"},
 	}
 
-	req, err := EntryToRequest(e, true)
+	req, err := EntryToRequest(t.Context(), e, EntryOptions{IgnoreHARCookies: true})
 	if err != nil {
 		t.Fatalf("EntryToRequest() error = %v", err)
 	}
@@ -232,20 +234,63 @@ func TestEntryToRequestFormEncodesParams(t *testing.T) {
 	}
 }
 
-func TestEntryToRequestParamsTakePrecedenceOverText(t *testing.T) {
+// The recorded text is what the browser actually sent, so it wins over params.
+// Reconstructing params instead used to corrupt multipart bodies, which are
+// recorded as params but must not be URL-encoded.
+func TestEntryToRequestPrefersRecordedText(t *testing.T) {
 	e := &Entry{}
-	e.Request.Method = "POST"
+	e.Request.Method = http.MethodPost
 	e.Request.URL = "http://example.com/login"
-	e.Request.PostData.Text = "ignored=text"
+	e.Request.PostData.Text = "user=bob&from=text"
+	e.Request.PostData.Params = []PostParam{{Name: "user", Value: "reconstructed"}}
+
+	req, err := EntryToRequest(t.Context(), e, EntryOptions{IgnoreHARCookies: true})
+	if err != nil {
+		t.Fatalf("EntryToRequest() error = %v", err)
+	}
+	body, _ := io.ReadAll(req.Body)
+	if want := "user=bob&from=text"; string(body) != want {
+		t.Errorf("body = %q, want %q", body, want)
+	}
+}
+
+// With no recorded text, form params are reconstructed.
+func TestEntryToRequestReconstructsFormParams(t *testing.T) {
+	e := &Entry{}
+	e.Request.Method = http.MethodPost
+	e.Request.URL = "http://example.com/login"
+	e.Request.PostData.MimeType = "application/x-www-form-urlencoded"
 	e.Request.PostData.Params = []PostParam{{Name: "user", Value: "bob"}}
 
-	req, err := EntryToRequest(e, true)
+	req, err := EntryToRequest(t.Context(), e, EntryOptions{IgnoreHARCookies: true})
 	if err != nil {
 		t.Fatalf("EntryToRequest() error = %v", err)
 	}
 	body, _ := io.ReadAll(req.Body)
 	if want := "user=bob"; string(body) != want {
 		t.Errorf("body = %q, want %q", body, want)
+	}
+	if got := req.Header.Get("Content-Type"); got != "application/x-www-form-urlencoded" {
+		t.Errorf("Content-Type = %q, want it derived from postData.mimeType", got)
+	}
+}
+
+// A multipart body recorded only as params cannot be reconstructed as a form, so
+// it must not be URL-encoded into something the server cannot parse.
+func TestEntryToRequestDoesNotFormEncodeMultipart(t *testing.T) {
+	e := &Entry{}
+	e.Request.Method = http.MethodPost
+	e.Request.URL = "http://example.com/upload"
+	e.Request.PostData.MimeType = "multipart/form-data; boundary=xyz"
+	e.Request.PostData.Params = []PostParam{{Name: "file", Value: "contents", FileName: "a.txt"}}
+
+	req, err := EntryToRequest(t.Context(), e, EntryOptions{IgnoreHARCookies: true})
+	if err != nil {
+		t.Fatalf("EntryToRequest() error = %v", err)
+	}
+	body, _ := io.ReadAll(req.Body)
+	if strings.Contains(string(body), "file=contents") {
+		t.Errorf("body = %q, want multipart params left alone rather than form-encoded", body)
 	}
 }
 
@@ -262,7 +307,7 @@ func TestEntryToRequestCookieHandling(t *testing.T) {
 	}
 
 	t.Run("cookies applied", func(t *testing.T) {
-		req, err := EntryToRequest(newEntry(), false)
+		req, err := EntryToRequest(t.Context(), newEntry(), EntryOptions{IgnoreHARCookies: false})
 		if err != nil {
 			t.Fatalf("EntryToRequest() error = %v", err)
 		}
@@ -277,12 +322,12 @@ func TestEntryToRequestCookieHandling(t *testing.T) {
 	})
 
 	t.Run("cookies ignored", func(t *testing.T) {
-		req, err := EntryToRequest(newEntry(), true)
+		req, err := EntryToRequest(t.Context(), newEntry(), EntryOptions{IgnoreHARCookies: true})
 		if err != nil {
 			t.Fatalf("EntryToRequest() error = %v", err)
 		}
 		if got := len(req.Cookies()); got != 0 {
-			t.Errorf("got %d cookies, want 0 when ignoreHarCookies is true", got)
+			t.Errorf("got %d cookies, want 0 when ignoreHARCookies is true", got)
 		}
 	})
 }
@@ -316,9 +361,10 @@ func TestNewReaderSkipsBOM(t *testing.T) {
 	}
 }
 
-func TestNewReaderBOMThenDecodes(t *testing.T) {
-	har, err := Decode(NewReader(strings.NewReader("\xef\xbb\xbf" + harWith(
-		entryJSON("2024-01-01T00:00:01.000Z", "GET", "http://example.com/a")))))
+// Decode applies the BOM skip itself, so a caller need not reach for NewReader.
+func TestDecodeSkipsBOM(t *testing.T) {
+	har, err := Decode(strings.NewReader("\xef\xbb\xbf" + harWith(
+		entryJSON("2024-01-01T00:00:01.000Z", "GET", "http://example.com/a"))))
 	if err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
@@ -336,13 +382,29 @@ func TestPostBody(t *testing.T) {
 		{name: "empty", pd: PostData{}, want: ""},
 		{name: "text only", pd: PostData{Text: "raw=body"}, want: "raw=body"},
 		{
-			name: "params only",
+			name: "form params only",
 			pd:   PostData{Params: []PostParam{{Name: "a", Value: "1"}, {Name: "b", Value: "2"}}},
 			want: "a=1&b=2",
 		},
 		{
-			name: "params win over text",
-			pd:   PostData{Text: "ignored", Params: []PostParam{{Name: "a", Value: "1"}}},
+			name: "recorded text wins over params",
+			pd:   PostData{Text: "from=text", Params: []PostParam{{Name: "a", Value: "1"}}},
+			want: "from=text",
+		},
+		{
+			name: "multipart params are not form-encoded",
+			pd: PostData{
+				MimeType: "multipart/form-data; boundary=xyz",
+				Params:   []PostParam{{Name: "a", Value: "1"}},
+			},
+			want: "",
+		},
+		{
+			name: "explicit form mime type encodes params",
+			pd: PostData{
+				MimeType: "application/x-www-form-urlencoded; charset=UTF-8",
+				Params:   []PostParam{{Name: "a", Value: "1"}},
+			},
 			want: "a=1",
 		},
 	}
@@ -375,5 +437,28 @@ func TestIsWebSocket(t *testing.T) {
 				t.Errorf("isWebSocket(%q) = %v, want %v", tt.url, got, tt.want)
 			}
 		})
+	}
+}
+
+// NewReader must not stack another buffer on an input that is already buffered:
+// the second wrapper would peek from the first and lose the bytes it consumed.
+func TestNewReaderDoesNotDoubleWrap(t *testing.T) {
+	inner := bufio.NewReader(strings.NewReader(`{"a":1}`))
+
+	if got := NewReader(inner); got != inner {
+		t.Error("NewReader wrapped an already-buffered reader, want it returned as is")
+	}
+}
+
+// A BOM must still be skipped when the input is already a *bufio.Reader.
+func TestNewReaderSkipsBOMOnBufferedInput(t *testing.T) {
+	inner := bufio.NewReader(strings.NewReader("\xef\xbb\xbf" + `{"a":1}`))
+
+	got, err := io.ReadAll(NewReader(inner))
+	if err != nil {
+		t.Fatalf("reading: %v", err)
+	}
+	if string(got) != `{"a":1}` {
+		t.Errorf("got %q, want %q", got, `{"a":1}`)
 	}
 }
