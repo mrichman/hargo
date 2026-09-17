@@ -36,6 +36,17 @@ type RunOptions struct {
 	// means no cap. Useful for HARs containing minutes of user idle time.
 	MaxDelay time.Duration
 
+	// Filter selects which entries to replay. A zero Filter selects all of them.
+	// Entries are selected before replay begins, so the failure tally counts only
+	// the entries actually attempted.
+	Filter EntryFilter
+
+	// FailOnStatus counts a response of 400 or above as a failed entry, so that a
+	// replay of a broken recording exits non-zero. By default any response the
+	// server actually returned is a success, since a recorded 404 is often the
+	// expected result.
+	FailOnStatus bool
+
 	// Logger receives diagnostics about skipped and failed entries. A nil
 	// Logger discards them.
 	Logger *slog.Logger
@@ -72,6 +83,9 @@ func Run(ctx context.Context, r io.Reader, opts RunOptions) error {
 	if opts.Speed < 0 {
 		return fmt.Errorf("speed must not be negative, got %v", opts.Speed)
 	}
+	if err := opts.Filter.compile(); err != nil {
+		return err
+	}
 
 	logger := loggerOrDiscard(opts.Logger)
 	progress := writerOrDiscard(opts.Progress)
@@ -81,7 +95,11 @@ func Run(ctx context.Context, r io.Reader, opts RunOptions) error {
 		return err
 	}
 
-	if len(har.Log.Entries) == 0 {
+	// Selecting up front rather than skipping inside the loop keeps the tally's
+	// denominator equal to the number of entries actually attempted.
+	selected := filterEntries(har.Log.Entries, &opts.Filter)
+
+	if len(selected) == 0 {
 		return nil
 	}
 
@@ -107,7 +125,7 @@ func Run(ctx context.Context, r io.Reader, opts RunOptions) error {
 
 	failed := 0
 
-	for _, entry := range har.Log.Entries {
+	for _, entry := range selected {
 		st, err := ParseEntryTime(entry.StartedDateTime)
 		switch {
 		case err != nil:
@@ -158,10 +176,16 @@ func Run(ctx context.Context, r io.Reader, opts RunOptions) error {
 		_, _ = fmt.Fprintf(progress, "[%s,%v] URL: %s\n", entry.Request.Method, resp.StatusCode, entry.Request.URL)
 
 		_ = resp.Body.Close()
+
+		if opts.FailOnStatus && resp.StatusCode >= http.StatusBadRequest {
+			logger.Error("entry returned an error status",
+				"url", entry.Request.URL, "status", resp.StatusCode)
+			failed++
+		}
 	}
 
 	if failed > 0 {
-		return fmt.Errorf("%d of %d entries failed", failed, len(har.Log.Entries))
+		return fmt.Errorf("%d of %d entries failed", failed, len(selected))
 	}
 
 	return nil

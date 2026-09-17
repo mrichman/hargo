@@ -48,7 +48,7 @@ func TestReadStreamIgnoresEntriesAsAValue(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
-			go func() { _ = ReadStream(ctx, f, entries, nil) }()
+			go func() { _ = ReadStream(ctx, f, entries, ReadOptions{}) }()
 
 			select {
 			case e, ok := <-entries:
@@ -80,7 +80,7 @@ func TestReadStreamPrefersTheLogEntriesKey(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	go func() { _ = ReadStream(ctx, f, entries, nil) }()
+	go func() { _ = ReadStream(ctx, f, entries, ReadOptions{}) }()
 
 	select {
 	case e, ok := <-entries:
@@ -102,7 +102,7 @@ func TestReadStreamReportsMissingEntriesKey(t *testing.T) {
 	entries := make(chan Entry, 8)
 
 	done := make(chan error, 1)
-	go func() { done <- ReadStream(t.Context(), f, entries, nil) }()
+	go func() { done <- ReadStream(t.Context(), f, entries, ReadOptions{}) }()
 
 	select {
 	case err := <-done:

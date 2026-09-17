@@ -44,13 +44,31 @@ func TestLoadTestProgressWriterIsRaceFree(t *testing.T) {
 		t.Fatal("Progress received nothing")
 	}
 
-	// Torn writes would corrupt the line structure.
+	// Torn writes would corrupt the line structure. Per-request lines start with
+	// the worker index in brackets; the trailing summary block is indented, so it
+	// is checked separately below rather than treated as malformed.
+	sawRequestLine := false
 	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
-		if line == "" || strings.HasPrefix(line, "Load test complete") {
+		switch {
+		case line == "":
 			continue
-		}
-		if !strings.HasPrefix(line, "[") {
+		case strings.HasPrefix(line, "["):
+			sawRequestLine = true
+		case line == "Load test complete." || strings.HasPrefix(line, "  "):
+			// Part of the summary.
+		default:
 			t.Errorf("progress line is malformed, suggesting interleaved writes: %q", line)
+		}
+	}
+
+	if !sawRequestLine {
+		t.Error("Progress contained no per-request lines")
+	}
+
+	// The summary must survive concurrent progress writes intact.
+	for _, want := range []string{"Load test complete.", "requests", "failures", "latency"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("Progress missing %q from the summary", want)
 		}
 	}
 }

@@ -36,10 +36,20 @@ type LoadTestOptions struct {
 	// InsecureSkipVerify disables TLS certificate verification.
 	InsecureSkipVerify bool
 
+	// Filter selects which entries to replay. A zero Filter selects all of them.
+	// A filter that selects none of the entries present is an error rather than a
+	// silently empty run.
+	Filter EntryFilter
+
 	// Results, when non-nil, receives a copy of every result. LoadTest does not
 	// close it. A caller that supplies this channel must keep reading from it
 	// for the duration of the test, or the workers will block.
 	Results chan<- TestResult
+
+	// Summary, when non-nil, receives the figures for the completed test. It is
+	// filled in just before LoadTest returns, whether or not results were also
+	// recorded to InfluxDB.
+	Summary *LoadSummary
 
 	// Logger receives diagnostics about failed requests. A nil Logger discards
 	// them.
@@ -134,18 +144,28 @@ func LoadTest(ctx context.Context, r io.ReadSeeker, opts LoadTestOptions) error 
 	readDone := make(chan struct{})
 	go func() {
 		defer close(readDone)
-		readErr = ReadStream(ctx, r, entries, opts.Logger)
+		readErr = ReadStream(ctx, r, entries, ReadOptions{
+			Filter: opts.Filter,
+			Logger: opts.Logger,
+		})
 	}()
+
+	// One consumer both accumulates the summary and forwards to InfluxDB. Ranging
+	// the channel inside the writer would take exclusive ownership of it, which is
+	// why the summary used to be impossible whenever InfluxDB was configured.
+	acc := newSummaryAccumulator()
 
 	consumerDone := make(chan struct{})
 	go func() {
 		defer close(consumerDone)
 		if writer != nil {
-			writer.write(results)
-			return
+			writer.start()
 		}
-		// Drain, so a run without InfluxDB never blocks its workers.
-		for range results {
+		for result := range results {
+			acc.add(result)
+			if writer != nil {
+				writer.writeOne(result)
+			}
 		}
 	}()
 
@@ -165,12 +185,20 @@ func LoadTest(ctx context.Context, r io.ReadSeeker, opts LoadTestOptions) error 
 	<-consumerDone
 	<-readDone
 
-	_, _ = fmt.Fprintf(progress, "\nLoad test complete.\n")
+	summary := acc.summary()
+	if opts.Summary != nil {
+		*opts.Summary = summary
+	}
 
 	// Cancellation and the duration bound are how this test is meant to end.
 	if readErr != nil && !isDone(readErr) {
+		// A test that never got going has no figures worth reporting, and a block
+		// of zeroes printed above the error only obscures it. The out-param is
+		// still set, so a caller that wants the empty summary has it.
 		return readErr
 	}
+
+	summary.writeTo(progress)
 	return nil
 }
 
@@ -245,14 +273,15 @@ func processEntries(ctx context.Context, worker int, entries <-chan Entry,
 			}
 
 			endTime := time.Now()
-			latency := int(endTime.Sub(startTime) / time.Millisecond)
+			duration := endTime.Sub(startTime)
 
 			result := TestResult{
 				URL:       req.URL.String(),
 				Status:    status,
 				StartTime: startTime,
 				EndTime:   endTime,
-				Latency:   latency,
+				Latency:   int(duration / time.Millisecond),
+				Duration:  duration,
 				Method:    req.Method,
 				HARFile:   opts.HARFile,
 			}
@@ -268,7 +297,7 @@ func processEntries(ctx context.Context, worker int, entries <-chan Entry,
 				// Progress writes are serialized by syncWriter; a failed write is
 				// not something a worker can act on.
 				_, _ = fmt.Fprintf(progress, "[%d,%d] %s %d %dms\n",
-					worker, iter, entry.Request.URL, result.Status, latency)
+					worker, iter, entry.Request.URL, result.Status, result.Latency)
 			}
 
 			if !send(ctx, results, result) {

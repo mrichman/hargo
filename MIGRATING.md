@@ -29,12 +29,38 @@ github.com/mrichman/hargo/cmd/hargo@latest` silently fetched the 2021 code. The
    to call it.
 3. **The library is silent.** It never writes to stdout and never logs unless
    you pass a `Logger` or a `Progress` writer.
+4. **Every entry point takes an options struct,** even when you do not need any
+   of the options. Pass the zero value — `hargo.CurlOptions{}` — and behaviour is
+   unchanged. This is what makes it possible to add entry filtering to all of
+   them without another round of signature churn.
+
+## Entry filtering
+
+Every operation accepts an `EntryFilter` on its options struct. A zero filter
+selects everything, and each criterion that is set must match:
+
+```go
+err := hargo.Run(ctx, f, hargo.RunOptions{
+    Filter: hargo.EntryFilter{
+        URL:    `/api/`,      // unanchored regular expression
+        Method: []string{"POST"},
+        Status: []int{200, 204},
+    },
+})
+```
+
+`URL` is a regular expression rather than a glob, because a glob's `*` does not
+cross `/` — the intuitive `*.js` would match no full URL at all.
+
+A pattern that does not compile is reported as an error, so a typo does not look
+like a HAR with nothing in it.
 
 ## Function by function
 
 ### Decode, Validate, ToCurl
 
 `Validate` no longer returns a redundant `bool`; a nil error means valid.
+`ToCurl` takes a `CurlOptions`, and gains a streaming form.
 
 ```go
 // v1
@@ -45,12 +71,14 @@ cmd, err := hargo.ToCurl(hargo.NewReader(f))
 // v2
 har, err := hargo.Decode(f)
 err := hargo.Validate(f)
-cmd, err := hargo.ToCurl(f)
+cmd, err := hargo.ToCurl(f, hargo.CurlOptions{})
+err := hargo.ToCurlTo(os.Stdout, f, hargo.CurlOptions{}) // streams
 ```
 
 ### Dump
 
-`Dump` returns an error instead of logging one.
+`Dump` returns an error instead of logging one, and both forms take a
+`DumpOptions`.
 
 ```go
 // v1
@@ -58,8 +86,8 @@ hargo.Dump(hargo.NewReader(f))                 // errors were logged and lost
 err := hargo.DumpTo(os.Stdout, hargo.NewReader(f))
 
 // v2
-err := hargo.Dump(f)                            // writes to os.Stdout
-err := hargo.DumpTo(os.Stdout, f)
+err := hargo.Dump(f, hargo.DumpOptions{})              // writes to os.Stdout
+err := hargo.DumpTo(os.Stdout, f, hargo.DumpOptions{})
 ```
 
 ### Run
@@ -166,11 +194,13 @@ go hargo.ReadStream(file, entries, stop)
 close(stop)
 
 // v2
-go func() { err := hargo.ReadStream(ctx, file, entries, logger) }()
+go func() { err := hargo.ReadStream(ctx, file, entries, hargo.ReadOptions{Logger: logger}) }()
 cancel()
 ```
 
-`ReadStream` still closes `entries` before returning.
+`ReadStream` still closes `entries` before returning. A filter that selects none
+of the entries present is now an error rather than a silent end, since the replay
+loop would otherwise spin re-reading a document it discards.
 
 ## Renamed identifiers
 

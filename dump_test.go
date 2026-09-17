@@ -23,7 +23,7 @@ func TestDumpToWritesEntryDetails(t *testing.T) {
 	}]}}`
 
 	var buf bytes.Buffer
-	if err := DumpTo(&buf, strings.NewReader(har)); err != nil {
+	if err := DumpTo(&buf, strings.NewReader(har), DumpOptions{}); err != nil {
 		t.Fatalf("DumpTo() error = %v", err)
 	}
 
@@ -53,14 +53,14 @@ func TestDumpToWritesEntryDetails(t *testing.T) {
 
 func TestDumpToMalformedJSONReturnsError(t *testing.T) {
 	var buf bytes.Buffer
-	if err := DumpTo(&buf, strings.NewReader(`{"log":{ BROKEN`)); err == nil {
+	if err := DumpTo(&buf, strings.NewReader(`{"log":{ BROKEN`), DumpOptions{}); err == nil {
 		t.Error("DumpTo() error = nil, want non-nil for malformed JSON")
 	}
 }
 
 func TestDumpToEmptyEntries(t *testing.T) {
 	var buf bytes.Buffer
-	if err := DumpTo(&buf, strings.NewReader(harWith(""))); err != nil {
+	if err := DumpTo(&buf, strings.NewReader(harWith("")), DumpOptions{}); err != nil {
 		t.Fatalf("DumpTo() error = %v", err)
 	}
 	out := buf.String()
@@ -78,7 +78,7 @@ func TestDumpToSeparatesEntries(t *testing.T) {
 			entryJSON("2024-01-01T00:00:00.002Z", "GET", "http://example.com/b"))
 
 	var buf bytes.Buffer
-	if err := DumpTo(&buf, strings.NewReader(har)); err != nil {
+	if err := DumpTo(&buf, strings.NewReader(har), DumpOptions{}); err != nil {
 		t.Fatalf("DumpTo() error = %v", err)
 	}
 
@@ -94,7 +94,7 @@ func TestDumpToSeparatesEntries(t *testing.T) {
 
 func TestDumpToRealHARFixture(t *testing.T) {
 	var buf bytes.Buffer
-	if err := DumpTo(&buf, openFixture(t, "testdata/en.wikipedia.org.har")); err != nil {
+	if err := DumpTo(&buf, openFixture(t, "testdata/en.wikipedia.org.har"), DumpOptions{}); err != nil {
 		t.Fatalf("DumpTo() error = %v", err)
 	}
 	out := buf.String()

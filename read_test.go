@@ -33,7 +33,7 @@ func TestReadStreamDeliversEntries(t *testing.T) {
 	entries := make(chan Entry, 8)
 	ctx, cancel := context.WithCancel(t.Context())
 
-	go func() { _ = ReadStream(ctx, f, entries, nil) }()
+	go func() { _ = ReadStream(ctx, f, entries, ReadOptions{}) }()
 
 	first := <-entries
 	if first.Request.URL != "http://example.com/a" {
@@ -71,7 +71,7 @@ func TestReadStreamLoopsOverFile(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	go func() { _ = ReadStream(ctx, f, entries, nil) }()
+	go func() { _ = ReadStream(ctx, f, entries, ReadOptions{}) }()
 
 	// The single entry should be replayed repeatedly as the reader seeks back
 	// to the start of the file.
@@ -99,7 +99,7 @@ func TestReadStreamReturnsWhenNobodyIsReading(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 
 	done := make(chan error, 1)
-	go func() { done <- ReadStream(ctx, f, entries, nil) }()
+	go func() { done <- ReadStream(ctx, f, entries, ReadOptions{}) }()
 
 	cancel()
 
@@ -134,7 +134,7 @@ func TestReadStreamMalformedInputDoesNotExit(t *testing.T) {
 			entries := make(chan Entry, 8)
 
 			done := make(chan error, 1)
-			go func() { done <- ReadStream(t.Context(), f, entries, nil) }()
+			go func() { done <- ReadStream(t.Context(), f, entries, ReadOptions{}) }()
 
 			// The channel must be closed rather than the process killed.
 			var err error
@@ -173,7 +173,7 @@ func TestReadStreamSkipsEntriesWithoutURL(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	go func() { _ = ReadStream(ctx, f, entries, nil) }()
+	go func() { _ = ReadStream(ctx, f, entries, ReadOptions{}) }()
 
 	var got []string
 	for range 2 {

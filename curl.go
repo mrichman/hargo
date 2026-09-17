@@ -8,23 +8,51 @@ import (
 	"al.essio.dev/pkg/shellescape"
 )
 
-// ToCurl converts every entry in a HAR document to a curl command line.
+// CurlOptions controls how a HAR is converted to curl command lines. The zero
+// value converts every entry.
+type CurlOptions struct {
+	// Filter selects which entries to convert. A zero Filter selects all of them.
+	Filter EntryFilter
+}
+
+// ToCurl converts the entries a HAR document to curl command lines.
 //
 // curl -X <method> -b '<name=value; name=value...>' -H '<name: value>' ... -d '<postData>' <url>.
-func ToCurl(r io.Reader) (string, error) {
+//
+// For a large HAR prefer [ToCurlTo], which streams instead of assembling the
+// whole output in memory.
+func ToCurl(r io.Reader, opts CurlOptions) (string, error) {
+	var buf strings.Builder
+	if err := ToCurlTo(&buf, r, opts); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+// ToCurlTo writes a curl command line for each selected entry to w.
+func ToCurlTo(w io.Writer, r io.Reader, opts CurlOptions) error {
+	if err := opts.Filter.compile(); err != nil {
+		return err
+	}
+
 	dec := json.NewDecoder(NewReader(r))
 	var har HAR
 	if err := dec.Decode(&har); err != nil {
-		return "", err
+		return err
 	}
 
-	var command string
+	// errWriter latches the first write error, so the loop does not need to check
+	// every line.
+	ew := &errWriter{w: w}
 
 	for _, entry := range har.Log.Entries {
-		command += fromEntry(entry) + "\n\n"
+		if !opts.Filter.Match(entry) {
+			continue
+		}
+		ew.printf("%s\n\n", fromEntry(entry))
 	}
 
-	return command, nil
+	return ew.err
 }
 
 // fromEntry renders one HAR entry as a curl command line.

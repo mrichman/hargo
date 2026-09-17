@@ -37,7 +37,7 @@ func TestInfluxWriterDistinguishesConcurrentResults(t *testing.T) {
 	}
 	close(results)
 
-	w.write(results)
+	writeAll(w, results)
 
 	_, writes := fake.recorded()
 	if len(writes) != 3 {
@@ -83,7 +83,7 @@ func TestInfluxWriterTagsResults(t *testing.T) {
 	}
 	close(results)
 
-	w.write(results)
+	writeAll(w, results)
 
 	_, writes := fake.recorded()
 	if len(writes) != 1 {
@@ -121,7 +121,7 @@ func TestInfluxWriterStoresTimesAsNumbers(t *testing.T) {
 	}
 	close(results)
 
-	w.write(results)
+	writeAll(w, results)
 
 	_, writes := fake.recorded()
 	if len(writes) != 1 {

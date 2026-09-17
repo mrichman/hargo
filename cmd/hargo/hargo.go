@@ -5,9 +5,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/url"
 	"os"
@@ -55,6 +57,68 @@ func logger(c *cli.Context) *slog.Logger {
 		level = slog.LevelDebug
 	}
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+}
+
+// filterFlags are the entry-selection flags, registered on every command so that
+// they work wherever they are placed relative to the subcommand.
+func filterFlags() []cli.Flag {
+	return []cli.Flag{
+		cli.StringFlag{
+			Name:  "url",
+			Usage: "Only entries whose URL matches this regular expression"},
+		cli.StringSliceFlag{
+			Name:  "method",
+			Usage: "Only entries using this HTTP method; repeatable"},
+		cli.IntSliceFlag{
+			Name:  "status",
+			Usage: "Only entries whose recorded response status is this; repeatable"},
+	}
+}
+
+// entryFilter builds the filter described by the command line.
+func entryFilter(c *cli.Context) hargo.EntryFilter {
+	return hargo.EntryFilter{
+		URL:    c.String("url"),
+		Method: c.StringSlice("method"),
+		Status: c.IntSlice("status"),
+	}
+}
+
+// outputFlag names the file to write to instead of stdout.
+func outputFlag() cli.Flag {
+	return cli.StringFlag{
+		Name:  "output, o",
+		Usage: "Write to this file instead of stdout"}
+}
+
+// writeOutput sends rendered output to the file named by --output, or to stdout
+// when the flag is absent.
+//
+// render is called before the file is created, so a HAR that fails to parse
+// leaves no truncated file behind.
+func writeOutput(c *cli.Context, render func(w io.Writer) error) error {
+	var buf bytes.Buffer
+	if err := render(&buf); err != nil {
+		return err
+	}
+
+	path := c.String("output")
+	if path == "" {
+		_, err := os.Stdout.Write(buf.Bytes())
+		return err
+	}
+
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		return cli.NewExitError(fmt.Sprintf("cannot write %s: %v", path, err), 1)
+	}
+	return nil
+}
+
+// commandFlags combines the debug and filter flags with any command-specific ones.
+func commandFlags(extra ...cli.Flag) []cli.Flag {
+	flags := []cli.Flag{debugFlag()}
+	flags = append(flags, filterFlags()...)
+	return append(flags, extra...)
 }
 
 // openHAR opens the .har file named by the first CLI argument.
@@ -108,7 +172,7 @@ func run() int {
 			UsageText:   "fetch - fetch all URLs",
 			Description: "fetch all URLs found in HAR file, saving all objects in an output directory",
 			ArgsUsage:   "<.har file> [output dir]",
-			Flags:       []cli.Flag{debugFlag()},
+			Flags:       commandFlags(),
 			Action: func(c *cli.Context) error {
 				file, err := openHAR(c)
 				if err != nil {
@@ -123,6 +187,7 @@ func run() int {
 				// timestamped directory is created in the working directory.
 				return hargo.Fetch(ctx, file, hargo.FetchOptions{
 					OutDir:   c.Args().Get(1),
+					Filter:   entryFilter(c),
 					Logger:   log,
 					Progress: os.Stdout,
 				})
@@ -135,7 +200,7 @@ func run() int {
 			UsageText:   "curl - convert .har file to curl format",
 			Description: "convert all .har file entries to curl commands",
 			ArgsUsage:   "<.har file>",
-			Flags:       []cli.Flag{debugFlag()},
+			Flags:       commandFlags(outputFlag()),
 			Action: func(c *cli.Context) error {
 				file, err := openHAR(c)
 				if err != nil {
@@ -145,13 +210,9 @@ func run() int {
 
 				logger(c).Debug("converting .har file to curl", "file", c.Args().First())
 
-				cmd, err := hargo.ToCurl(file)
-				if err != nil {
-					return err
-				}
-
-				fmt.Println(cmd)
-				return nil
+				return writeOutput(c, func(w io.Writer) error {
+					return hargo.ToCurlTo(w, file, hargo.CurlOptions{Filter: entryFilter(c)})
+				})
 			},
 		},
 		{
@@ -161,8 +222,7 @@ func run() int {
 			UsageText:   "run - execute all requests in .har file",
 			Description: "execute all requests in .har file",
 			ArgsUsage:   "<.har file>",
-			Flags: []cli.Flag{
-				debugFlag(),
+			Flags: commandFlags(
 				cli.BoolFlag{
 					Name:  "ignore-har-cookies",
 					Usage: "Ignore the cookies provided by the HAR entries"},
@@ -179,7 +239,10 @@ func run() int {
 				cli.DurationFlag{
 					Name:  "max-delay",
 					Usage: "Cap the wait before any single entry, e.g. 2s (0 = no cap)"},
-			},
+				cli.BoolFlag{
+					Name:  "fail-on-status",
+					Usage: "Treat a response of 400 or above as a failed entry"},
+			),
 			Action: func(c *cli.Context) error {
 				file, err := openHAR(c)
 				if err != nil {
@@ -196,6 +259,8 @@ func run() int {
 					Speed:              c.Float64("speed"),
 					NoWait:             c.Bool("no-wait"),
 					MaxDelay:           c.Duration("max-delay"),
+					Filter:             entryFilter(c),
+					FailOnStatus:       c.Bool("fail-on-status"),
 					Logger:             log,
 					Progress:           os.Stdout,
 				})
@@ -233,7 +298,7 @@ func run() int {
 			UsageText:   "dump - print all HTTP requests in .har file",
 			Description: "print all HTTP requests in .har file",
 			ArgsUsage:   "<.har file>",
-			Flags:       []cli.Flag{debugFlag()},
+			Flags:       commandFlags(outputFlag()),
 			Action: func(c *cli.Context) error {
 				file, err := openHAR(c)
 				if err != nil {
@@ -243,7 +308,9 @@ func run() int {
 
 				logger(c).Debug("dumping .har file", "file", c.Args().First())
 
-				return hargo.DumpTo(os.Stdout, file)
+				return writeOutput(c, func(w io.Writer) error {
+					return hargo.DumpTo(w, file, hargo.DumpOptions{Filter: entryFilter(c)})
+				})
 			},
 		},
 		{
@@ -253,8 +320,7 @@ func run() int {
 			UsageText:   "load - runs all requests in sequence, concurrently",
 			Description: "runs all requests in sequence, concurrently",
 			ArgsUsage:   "<.har file>",
-			Flags: []cli.Flag{
-				debugFlag(),
+			Flags: commandFlags(
 				cli.IntFlag{
 					Name:  "workers, w",
 					Value: 10,
@@ -272,7 +338,7 @@ func run() int {
 				cli.BoolFlag{
 					Name:  "insecure-skip-verify",
 					Usage: "Skips the TLS security checks"},
-			},
+			),
 			Action: func(c *cli.Context) error {
 				file, err := openHAR(c)
 				if err != nil {
@@ -301,6 +367,7 @@ func run() int {
 					Workers:            c.Int("w"),
 					Duration:           time.Duration(c.Int("d")) * time.Second,
 					InfluxDBURL:        influxURL,
+					Filter:             entryFilter(c),
 					IgnoreHARCookies:   c.Bool("ignore-har-cookies"),
 					InsecureSkipVerify: c.Bool("insecure-skip-verify"),
 					Logger:             log,

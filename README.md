@@ -57,9 +57,9 @@ go get github.com/mrichman/hargo/v2
 import "github.com/mrichman/hargo/v2"
 ```
 
-Every entry point reads from an `io.Reader`, the operations that do network I/O
-take a `context.Context`, and the library writes nothing and logs nothing unless
-you ask it to:
+Every entry point reads from an `io.Reader` and takes an options struct, the
+operations that do network I/O take a `context.Context`, and the library writes
+nothing and logs nothing unless you ask it to:
 
 ```go
 // Replay a HAR, printing progress and logging skipped entries.
@@ -68,6 +68,21 @@ err := hargo.Run(ctx, f, hargo.RunOptions{
 	Logger:   slog.Default(),
 	Progress: os.Stdout,
 })
+```
+
+Any operation can be limited to a subset of the entries, and a load test can
+report its own figures:
+
+```go
+// Load test only the API calls, and collect the summary.
+var summary hargo.LoadSummary
+err := hargo.LoadTest(ctx, f, hargo.LoadTestOptions{
+	Workers:  10,
+	Duration: 30 * time.Second,
+	Filter:   hargo.EntryFilter{URL: `/api/`, Method: []string{"POST"}},
+	Summary:  &summary,
+})
+fmt.Println(summary.Requests, summary.P95, summary.ErrorRate)
 ```
 
 Upgrading from v1? See [MIGRATING.md](MIGRATING.md).
@@ -101,6 +116,22 @@ If you use Google Chrome, you can record these files by following the steps belo
 
 ## Commands
 
+### Selecting entries
+
+Every command that reads entries accepts the same three filter flags, which
+combine — an entry must match all of the criteria you give:
+
+```sh
+hargo dump foo.har --url '/api/'            # unanchored regular expression
+hargo run foo.har --method POST            # repeatable
+hargo curl foo.har --status 200 --status 204
+hargo load foo.har --url '\.js$' --method GET
+```
+
+`--url` is a regular expression rather than a glob, because a glob's `*` does not
+cross `/`, so the intuitive `*.js` would match no full URL at all. A pattern that
+does not compile is reported as an error rather than quietly matching nothing.
+
 ### Fetch
 
 The `fetch` command downloads all resources references in .har file:
@@ -126,6 +157,13 @@ The `curl` command will output a [curl](https://curl.haxx.se/) command line for 
 
 `hargo curl foo.har`
 
+Write to a file instead of stdout with `-o`:
+
+`hargo curl foo.har -o requests.sh`
+
+The output is rendered before the file is created, so a malformed .har file
+leaves no truncated file behind.
+
 ### Run
 
 The `run` command executes each request in the .har file, in the order and with
@@ -146,6 +184,11 @@ An entry that cannot be built or sent is reported and skipped, so one broken
 request does not abandon the rest. `hargo run` exits non-zero if any entry
 failed.
 
+By default any response the server actually returned counts as a success, since a
+recorded 404 is often the expected result. To treat an error status as a failure:
+
+`hargo run foo.har --fail-on-status`
+
 This is similar to `fetch` but will not save any output.
 
 ### Validate
@@ -162,11 +205,29 @@ Dump prints information about all HTTP requests in .har file
 
 `hargo dump foo.har`
 
+Write to a file instead of stdout with `-o`:
+
+`hargo dump foo.har -o report.txt`
+
 ### Load
 
 Hargo can act as a load test agent. Given a .har file, hargo can spawn a number of concurrent workers to repeat each HTTP request in order. By default, hargo will spawn 10 workers and run for a duration of 60 seconds.
 
 Hargo will also save its results to [InfluxDB](https://www.influxdata.com/), if available. Each HTTP response is stored as a point of time-series data, which can be graphed by [Chronograf](https://www.influxdata.com/time-series-platform/chronograf/), [Grafana](http://grafana.org/), or similar visualization tool for analysis.
+
+When the test finishes, hargo prints a summary:
+
+```text
+Load test complete.
+  requests    83198 in 2.998s (27747.0/sec)
+  failures    0 (0.0%)
+  latency     min 37µs  p50 120µs  p95 264µs  p99 420µs  max 7.9ms
+  status      200=83198
+```
+
+The percentiles are exact rather than bucketed, and the elapsed time is measured
+rather than assumed from `-d`, so a test cut short reports what actually
+happened. The summary is printed whether or not InfluxDB is configured.
 
 ## Docker
 

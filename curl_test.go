@@ -155,7 +155,7 @@ func TestToCurlMultipleEntries(t *testing.T) {
 		entryJSON("2024-01-01T00:00:01.000Z", "GET", "http://example.com/one") + "," +
 			entryJSON("2024-01-01T00:00:02.000Z", "GET", "http://example.com/two"))
 
-	got, err := ToCurl(strings.NewReader(har))
+	got, err := ToCurl(strings.NewReader(har), CurlOptions{})
 	if err != nil {
 		t.Fatalf("ToCurl() error = %v", err)
 	}
@@ -173,7 +173,7 @@ func TestToCurlMultipleEntries(t *testing.T) {
 // Regression: the JSON decode error was logged and then discarded, so callers
 // received ("", nil) and could not tell that nothing had been converted.
 func TestToCurlMalformedJSONReturnsError(t *testing.T) {
-	got, err := ToCurl(strings.NewReader(`{"log":{ THIS IS NOT JSON`))
+	got, err := ToCurl(strings.NewReader(`{"log":{ THIS IS NOT JSON`), CurlOptions{})
 	if err == nil {
 		t.Fatalf("ToCurl() error = nil, want non-nil (got %q)", got)
 	}
@@ -183,7 +183,7 @@ func TestToCurlMalformedJSONReturnsError(t *testing.T) {
 }
 
 func TestToCurlEmptyEntries(t *testing.T) {
-	got, err := ToCurl(strings.NewReader(harWith("")))
+	got, err := ToCurl(strings.NewReader(harWith("")), CurlOptions{})
 	if err != nil {
 		t.Fatalf("ToCurl() error = %v", err)
 	}
@@ -194,7 +194,7 @@ func TestToCurlEmptyEntries(t *testing.T) {
 
 func TestToCurlRealHARFixture(t *testing.T) {
 	f := openFixture(t, "testdata/golang.org.har")
-	got, err := ToCurl(f)
+	got, err := ToCurl(f, CurlOptions{})
 	if err != nil {
 		t.Fatalf("ToCurl() error = %v", err)
 	}
@@ -283,7 +283,7 @@ func TestFromEntryKeepsCookieHeaderWhenNoCookiesArray(t *testing.T) {
 // The real fixture is full of HTTP/2 pseudo-headers.
 func TestToCurlFixtureHasNoPseudoHeaders(t *testing.T) {
 	f := openFixture(t, "testdata/golang.org.har")
-	got, err := ToCurl(f)
+	got, err := ToCurl(f, CurlOptions{})
 	if err != nil {
 		t.Fatalf("ToCurl() error = %v", err)
 	}

@@ -34,6 +34,11 @@ type FetchOptions struct {
 	// error pages named after the resources they failed to be.
 	AcceptErrorStatus bool
 
+	// Filter selects which entries to download. A zero Filter selects all of them.
+	// Entries are selected before downloading begins, so the failure tally counts
+	// only the entries actually attempted.
+	Filter EntryFilter
+
 	// Logger receives diagnostics about skipped and failed entries. A nil
 	// Logger discards them.
 	Logger *slog.Logger
@@ -57,6 +62,10 @@ func (o FetchOptions) outDir() string {
 // skipped, so one bad resource does not abandon the rest; Fetch then returns an
 // error naming how many failed. Cancelling ctx stops the download.
 func Fetch(ctx context.Context, r io.Reader, opts FetchOptions) error {
+	if err := opts.Filter.compile(); err != nil {
+		return err
+	}
+
 	logger := loggerOrDiscard(opts.Logger)
 	progress := writerOrDiscard(opts.Progress)
 
@@ -64,6 +73,10 @@ func Fetch(ctx context.Context, r io.Reader, opts FetchOptions) error {
 	if err != nil {
 		return err
 	}
+
+	// Selecting up front rather than skipping inside the loop keeps the tally's
+	// denominator equal to the number of entries actually attempted.
+	selected := filterEntries(har.Log.Entries, &opts.Filter)
 
 	outdir := opts.outDir()
 	if err := os.MkdirAll(outdir, 0o755); err != nil {
@@ -73,7 +86,7 @@ func Fetch(ctx context.Context, r io.Reader, opts FetchOptions) error {
 	alloc := newNameAllocator(outdir)
 	failed := 0
 
-	for _, entry := range har.Log.Entries {
+	for _, entry := range selected {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -147,7 +160,7 @@ func Fetch(ctx context.Context, r io.Reader, opts FetchOptions) error {
 	}
 
 	if failed > 0 {
-		return fmt.Errorf("%d of %d entries failed", failed, len(har.Log.Entries))
+		return fmt.Errorf("%d of %d entries failed", failed, len(selected))
 	}
 
 	return nil

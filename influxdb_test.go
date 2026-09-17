@@ -114,6 +114,16 @@ func parseBasicAuth(header string) (user, pass string, ok bool) {
 	return user, pass, ok
 }
 
+// writeAll drains results into w, mirroring what LoadTest's consumer goroutine
+// does. The writer records one result at a time so that a single consumer can
+// both accumulate a summary and forward to InfluxDB.
+func writeAll(w *influxWriter, results <-chan TestResult) {
+	w.start()
+	for r := range results {
+		w.writeOne(r)
+	}
+}
+
 // influxURL turns a test server URL into the form the CLI passes: the path names
 // the database.
 func influxURL(t *testing.T, srvURL, db string) url.URL {
@@ -207,7 +217,7 @@ func TestInfluxWriterWritesPoints(t *testing.T) {
 	close(results)
 
 	// write consumes until the channel is closed.
-	w.write(results)
+	writeAll(w, results)
 
 	_, writes := fake.recorded()
 	if len(writes) != 2 {
@@ -238,7 +248,7 @@ func TestInfluxWriterContinuesAfterWriteError(t *testing.T) {
 	}
 	close(results)
 
-	w.write(results)
+	writeAll(w, results)
 
 	if _, writes := fake.recorded(); len(writes) != 3 {
 		t.Errorf("got %d writes, want all 3 attempted despite errors", len(writes))

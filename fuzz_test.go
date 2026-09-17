@@ -62,7 +62,7 @@ func FuzzToCurl(f *testing.F) {
 	f.Add(`{"log":{`)
 
 	f.Fuzz(func(t *testing.T, in string) {
-		out, err := ToCurl(strings.NewReader(in))
+		out, err := ToCurl(strings.NewReader(in), CurlOptions{})
 		if err != nil {
 			if out != "" {
 				t.Fatalf("ToCurl returned output %q alongside error %v", out, err)

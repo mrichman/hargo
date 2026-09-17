@@ -60,7 +60,26 @@ func TestLibraryIsSilentByDefault(t *testing.T) {
 		{
 			name: "ToCurl",
 			call: func(t *testing.T) {
-				_, _ = ToCurl(strings.NewReader(`{"log":{ BROKEN`))
+				_, _ = ToCurl(strings.NewReader(`{"log":{ BROKEN`), CurlOptions{})
+			},
+		},
+		{
+			name: "Dump",
+			call: func(t *testing.T) {
+				// DumpTo writes to the caller's writer; Dump with a broken
+				// document must still print nothing of its own.
+				_ = Dump(strings.NewReader(`{"log":{ BROKEN`), DumpOptions{})
+			},
+		},
+		{
+			name: "LoadTest",
+			call: func(t *testing.T) {
+				// A nil Progress must suppress both the per-request lines and the
+				// summary block, not just the former.
+				_ = LoadTest(t.Context(), strings.NewReader(har), LoadTestOptions{
+					Workers:  1,
+					Duration: 100 * time.Millisecond,
+				})
 			},
 		},
 		{
@@ -76,7 +95,7 @@ func TestLibraryIsSilentByDefault(t *testing.T) {
 				defer cancel()
 				f := writeTempHAR(t, `{"log":{"version":"1.2","entries":[{"request":`)
 				entries := make(chan Entry, 8)
-				_ = ReadStream(ctx, f, entries, nil)
+				_ = ReadStream(ctx, f, entries, ReadOptions{})
 			},
 		},
 	}

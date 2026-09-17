@@ -13,13 +13,13 @@ import (
 // the wrapper wires up and reports errors.
 func TestDumpWritesToStdout(t *testing.T) {
 	har := harWith(entryJSON("2024-01-01T00:00:00.001Z", "GET", "http://example.com/a"))
-	if err := Dump(strings.NewReader(har)); err != nil {
+	if err := Dump(strings.NewReader(har), DumpOptions{}); err != nil {
 		t.Errorf("Dump() error = %v", err)
 	}
 }
 
 func TestDumpMalformedInputReturnsError(t *testing.T) {
-	if err := Dump(strings.NewReader(`{"log":{ BROKEN`)); err == nil {
+	if err := Dump(strings.NewReader(`{"log":{ BROKEN`), DumpOptions{}); err == nil {
 		t.Error("Dump() error = nil, want non-nil for malformed JSON")
 	}
 }

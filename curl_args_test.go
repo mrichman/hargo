@@ -207,7 +207,7 @@ func TestFromEntryDoesNotDuplicateContentType(t *testing.T) {
 // Every entry in a real fixture must produce a command whose arguments are all
 // separated, as a guard against the class of bug above.
 func TestToCurlRealFixtureHasNoGluedArguments(t *testing.T) {
-	got, err := ToCurl(openFixture(t, "testdata/golang.org.har"))
+	got, err := ToCurl(openFixture(t, "testdata/golang.org.har"), CurlOptions{})
 	if err != nil {
 		t.Fatalf("ToCurl() error = %v", err)
 	}

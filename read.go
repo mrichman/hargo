@@ -8,19 +8,34 @@ import (
 	"log/slog"
 )
 
-// ReadStream decodes the entries of a HAR document and sends them on entries,
-// replaying r from the start each time it reaches the end so that a load test
-// can run for longer than the recording. It closes entries before returning.
+// ReadOptions controls how ReadStream decodes and selects entries. The zero
+// value streams every entry and produces no output.
+type ReadOptions struct {
+	// Filter selects which entries to deliver. A zero Filter selects all of them.
+	Filter EntryFilter
+
+	// Logger receives diagnostics. A nil Logger discards them.
+	Logger *slog.Logger
+}
+
+// ReadStream decodes the entries of a HAR document and sends the selected ones on
+// entries, replaying r from the start each time it reaches the end so that a load
+// test can run for longer than the recording. It closes entries before returning.
 //
-// ReadStream returns ctx.Err() when ctx is cancelled, nil when r holds no
-// usable entries, and a descriptive error when r cannot be decoded. Streaming
-// avoids holding the whole document in memory.
+// ReadStream returns ctx.Err() when ctx is cancelled, nil when r holds no usable
+// entries, and a descriptive error when r cannot be decoded or when a filter
+// selects none of the entries it did find. Streaming avoids holding the whole
+// document in memory.
 //
 // https://golang.org/pkg/encoding/json/#example_Decoder_Decode_stream
-func ReadStream(ctx context.Context, r io.ReadSeeker, entries chan<- Entry, logger *slog.Logger) error {
-	log := loggerOrDiscard(logger)
+func ReadStream(ctx context.Context, r io.ReadSeeker, entries chan<- Entry, opts ReadOptions) error {
+	log := loggerOrDiscard(opts.Logger)
 
 	defer close(entries)
+
+	if err := opts.Filter.compile(); err != nil {
+		return err
+	}
 
 	for {
 		// The outer loop replays the document indefinitely, so it needs its own
@@ -42,7 +57,9 @@ func ReadStream(ctx context.Context, r io.ReadSeeker, entries chan<- Entry, logg
 			return fmt.Errorf("cannot read HAR entries: %w", err)
 		}
 
-		sent := 0
+		// usable counts entries that could have been sent, so that a filter which
+		// selects nothing is distinguishable from a HAR with nothing in it.
+		usable, sent := 0, 0
 		for decoder.More() {
 			var e Entry
 			if err := decoder.Decode(&e); err != nil {
@@ -50,6 +67,14 @@ func ReadStream(ctx context.Context, r io.ReadSeeker, entries chan<- Entry, logg
 			}
 
 			if len(e.Request.URL) == 0 {
+				continue
+			}
+			usable++
+
+			// Filtering happens here rather than in the consumer: a consumer-side
+			// filter would leave sent non-zero, so the replay loop below would spin
+			// re-reading and re-seeking the file while discarding everything.
+			if !opts.Filter.Match(e) {
 				continue
 			}
 
@@ -66,6 +91,10 @@ func ReadStream(ctx context.Context, r io.ReadSeeker, entries chan<- Entry, logg
 		// A pass that produced nothing will produce nothing on every
 		// subsequent pass either, so replaying it just burns CPU.
 		if sent == 0 {
+			if usable > 0 {
+				// Ending silently here would look like a HAR with no entries.
+				return fmt.Errorf("filter selected none of the %d entries in the HAR", usable)
+			}
 			log.Warn("HAR file contains no usable entries")
 			return nil
 		}

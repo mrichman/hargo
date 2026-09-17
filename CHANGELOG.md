@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-09-17
 
 ### Changed
 
@@ -33,6 +33,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   conveyed.
 - `Dump` returns an error instead of logging one, and `ReadStream` returns an
   error instead of logging and closing silently.
+- Every entry point takes an options struct, so that behaviour can be added
+  without further signature churn: `ToCurl` and `ToCurlTo` take a `CurlOptions`,
+  `Dump` and `DumpTo` a `DumpOptions`, and `ReadStream` a `ReadOptions` in place
+  of its trailing `*slog.Logger`.
+- `ReadStream` reports an error when a filter selects none of the entries it
+  found, rather than ending as though the HAR were empty. Left silent, its replay
+  loop would spin re-reading a document it discards.
 - `Har`, `HarVersion`, `IgnoreHarCookies`, and `HarFile` are renamed to `HAR`,
   `HARVersion`, `IgnoreHARCookies`, and `HARFile`, since HAR is an initialism.
 - An unreachable InfluxDB now fails a load test up front instead of replaying
@@ -47,6 +54,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Entry filtering on every operation.** `EntryFilter`, carried on each options
+  struct, selects entries by URL (an unanchored regular expression), HTTP method
+  (case-insensitive), and recorded response status. Criteria combine, a zero
+  filter selects everything, and a pattern that does not compile is reported
+  rather than quietly matching nothing. Exposed on the command line as `--url`,
+  `--method`, and `--status`, accepted by `fetch`, `curl`, `run`, `dump`, and
+  `load`.
+- **A load test summary.** `LoadTest` prints the request count, throughput,
+  failure rate, exact latency percentiles, and a status breakdown when it
+  finishes, and fills in `LoadTestOptions.Summary` for callers that want the
+  figures. The elapsed time is measured rather than taken from the configured
+  duration, so a test cut short reports what actually happened. This works
+  whether or not InfluxDB is configured; previously the InfluxDB writer owned the
+  results channel, which is what made a summary impossible alongside it.
+- **`-o`/`--output` on `curl` and `dump`,** writing to a file instead of stdout.
+  The output is rendered before the file is created, so a malformed HAR leaves no
+  truncated file behind and does not clobber an existing one.
+- **`RunOptions.FailOnStatus`** and `hargo run --fail-on-status`, which count a
+  response of 400 or above as a failed entry. Off by default, because a recorded
+  404 is often the expected result.
+- `ToCurlTo`, which streams curl command lines to an `io.Writer` instead of
+  assembling the whole output in memory.
+- `TestResult.Duration`, the round trip as a `time.Duration`. The existing
+  `Latency` is whole milliseconds, which truncates every request against a fast
+  server to zero and made percentiles meaningless.
 - `LoadTestOptions.Results`, an optional channel that receives every
   `TestResult`, so callers can collect results without running InfluxDB.
 - `FetchOptions.AcceptErrorStatus`, which saves the response body even when the

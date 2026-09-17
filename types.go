@@ -367,6 +367,10 @@ type TestResult struct {
 	StartTime time.Time `json:"startTime"`
 	EndTime   time.Time `json:"endTime"`
 	Latency   int       `json:"latency"` // milliseconds
-	Method    string    `json:"method"`
-	HARFile   string    `json:"harfile"`
+	// Duration is the full round trip, including receiving the response body.
+	// Latency is the same measurement truncated to whole milliseconds, which is
+	// too coarse for percentiles against a fast server.
+	Duration time.Duration `json:"duration"`
+	Method   string        `json:"method"`
+	HARFile  string        `json:"harfile"`
 }

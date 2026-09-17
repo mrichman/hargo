@@ -20,8 +20,8 @@ const influxPingAttempts = 3
 // influxHTTPTimeout bounds every InfluxDB request. The client defaults to no
 // timeout at all, and Ping's argument is a wait_for_leader query parameter rather
 // than a client timeout, so without this a stalled server blocks forever. That
-// mattered most in write: it runs on the consumer goroutine that LoadTest joins
-// on, so a stall there hung the whole test after its workers had already stopped.
+// mattered most in the write path: it runs on the consumer goroutine that LoadTest
+// joins on, so a stall there hung the whole test after its workers had stopped.
 const influxHTTPTimeout = 30 * time.Second
 
 // influxWriter records test results in an InfluxDB database.
@@ -121,64 +121,69 @@ func validateDatabaseName(name string) error {
 	return nil
 }
 
-// write consumes results until the channel is closed, recording each one.
-func (w *influxWriter) write(results <-chan TestResult) {
+// start announces that results are about to be recorded.
+func (w *influxWriter) start() {
 	w.logger.Info("recording results to InfluxDB", "db", w.db)
+}
 
-	for result := range results {
-		bp, err := client.NewBatchPoints(client.BatchPointsConfig{
-			Database: w.db,
-			// Nanosecond precision keeps concurrent results distinct. Millisecond
-			// precision truncated the timestamp, and since a point's identity is
-			// measurement plus tags plus timestamp, results landing in the same
-			// millisecond silently overwrote one another.
-			Precision: "ns",
-		})
-		if err != nil {
-			w.logger.Error("cannot create InfluxDB batch", "err", err)
-			continue
-		}
+// writeOne records a single result.
+//
+// This takes one result rather than ranging a channel so that a single consumer
+// can both accumulate a summary and forward to InfluxDB; ranging the channel here
+// would take exclusive ownership of it.
+func (w *influxWriter) writeOne(result TestResult) {
+	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
+		Database: w.db,
+		// Nanosecond precision keeps concurrent results distinct. Millisecond
+		// precision truncated the timestamp, and since a point's identity is
+		// measurement plus tags plus timestamp, results landing in the same
+		// millisecond silently overwrote one another.
+		Precision: "ns",
+	})
+	if err != nil {
+		w.logger.Error("cannot create InfluxDB batch", "err", err)
+		return
+	}
 
-		// Tags are indexed and form part of a point's identity, so they both make
-		// the series queryable and stop distinct results from colliding.
-		tags := map[string]string{
-			"method":  result.Method,
-			"status":  strconv.Itoa(result.Status),
-			"har":     result.HARFile,
-			"outcome": outcome(result.Status),
-		}
+	// Tags are indexed and form part of a point's identity, so they both make
+	// the series queryable and stop distinct results from colliding.
+	tags := map[string]string{
+		"method":  result.Method,
+		"status":  strconv.Itoa(result.Status),
+		"har":     result.HARFile,
+		"outcome": outcome(result.Status),
+	}
 
-		// Times are stored as Unix nanoseconds rather than time.Time: the client
-		// formats an unrecognised field type with %v, which for a time.Time
-		// includes the monotonic clock reading and is not queryable as a time.
-		fields := map[string]any{
-			"URL":       result.URL,
-			"Status":    result.Status,
-			"StartTime": result.StartTime.UnixNano(),
-			"EndTime":   result.EndTime.UnixNano(),
-			"Latency":   result.Latency,
-			"Method":    result.Method,
-			"HARFile":   result.HARFile,
-		}
+	// Times are stored as Unix nanoseconds rather than time.Time: the client
+	// formats an unrecognised field type with %v, which for a time.Time
+	// includes the monotonic clock reading and is not queryable as a time.
+	fields := map[string]any{
+		"URL":       result.URL,
+		"Status":    result.Status,
+		"StartTime": result.StartTime.UnixNano(),
+		"EndTime":   result.EndTime.UnixNano(),
+		"Latency":   result.Latency,
+		"Method":    result.Method,
+		"HARFile":   result.HARFile,
+	}
 
-		// The point is timestamped when the request started, not when it happened
-		// to be recorded.
-		ts := result.StartTime
-		if ts.IsZero() {
-			ts = time.Now()
-		}
+	// The point is timestamped when the request started, not when it happened
+	// to be recorded.
+	ts := result.StartTime
+	if ts.IsZero() {
+		ts = time.Now()
+	}
 
-		pt, err := client.NewPoint("test_result", tags, fields, ts)
-		if err != nil {
-			w.logger.Error("cannot create InfluxDB point", "err", err)
-			continue
-		}
+	pt, err := client.NewPoint("test_result", tags, fields, ts)
+	if err != nil {
+		w.logger.Error("cannot create InfluxDB point", "err", err)
+		return
+	}
 
-		bp.AddPoint(pt)
+	bp.AddPoint(pt)
 
-		if err := w.client.Write(bp); err != nil {
-			w.logger.Error("cannot write to InfluxDB", "err", err)
-		}
+	if err := w.client.Write(bp); err != nil {
+		w.logger.Error("cannot write to InfluxDB", "err", err)
 	}
 }
 
