@@ -1,4 +1,4 @@
-.PHONY: all build install update test race cover lint fmt vet vuln tidy fuzz check clean docker help
+.PHONY: all build install update test race cover cover-html lint actionlint fmt vet vuln tidy fuzz check clean docker release-check release-snapshot help
 
 IMAGE := hargo
 BUILD_DATE := $(shell date -R)
@@ -14,7 +14,7 @@ FUZZTIME ?= 30s
 # Everything CI enforces, in one command.
 all: check
 
-check: tidy fmt vet lint test vuln
+check: tidy fmt vet lint actionlint test vuln
 
 # Builds hargo
 build:
@@ -46,6 +46,10 @@ cover-html: cover
 
 lint:
 	golangci-lint run --timeout 5m ./...
+
+# Lints the GitHub Actions workflows
+actionlint:
+	$(GO) run github.com/rhysd/actionlint/cmd/actionlint@latest -color
 
 fmt:
 	gofmt -l -w .
@@ -79,7 +83,17 @@ fuzz:
 
 clean:
 	rm -f hargo coverage.out
+	rm -rf dist
 	$(GO) clean -testcache
+
+# Validates .goreleaser.yml without building anything
+release-check:
+	$(GO) run github.com/goreleaser/goreleaser/v2@latest check
+
+# Builds all release artefacts into dist/ without publishing. Use this to verify
+# a release before tagging; CI runs 'goreleaser release' on v* tags.
+release-snapshot:
+	$(GO) run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
 
 docker:
 	docker build --rm -t ${IMAGE} \
@@ -101,11 +115,14 @@ help:
 	@echo "cover       run tests and print per-function coverage"
 	@echo "cover-html  open the HTML coverage report"
 	@echo "lint        run golangci-lint"
+	@echo "actionlint  lint the GitHub Actions workflows"
 	@echo "fmt         gofmt the tree in place"
 	@echo "vet         run go vet"
 	@echo "vuln        run govulncheck"
 	@echo "tidy        verify go.mod/go.sum are tidy"
 	@echo "fuzz        fuzz each parser for FUZZTIME (default $(FUZZTIME))"
-	@echo "check       tidy + fmt + vet + lint + test + vuln"
+	@echo "check       tidy + fmt + vet + lint + actionlint + test + vuln"
 	@echo "clean       remove build and coverage artefacts"
 	@echo "docker      build the container image"
+	@echo "release-check     validate .goreleaser.yml"
+	@echo "release-snapshot  build release artefacts into dist/ without publishing"

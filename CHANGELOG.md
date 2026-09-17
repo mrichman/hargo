@@ -59,6 +59,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Release automation: CI now runs goreleaser on `v*` tags, gated on every other
+  job passing, and validates `.goreleaser.yml` on every push. The four
+  hand-rolled release scripts in `tools/` (425 lines) are removed in favour of
+  it. `make release-check` and `make release-snapshot` verify a release locally
+  before tagging.
+- `actionlint` runs in CI and via `make actionlint`, so workflow errors are
+  caught in review rather than on push.
 - A test suite covering the library, from zero tests to full coverage of every
   exported function except the CLI wiring.
 - Fuzz targets for `Decode`, `Validate`, `ToCurl`, `NewReader`, and
@@ -83,6 +90,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   following its module rename.
 - `Transport.Dial` replaced with `DialContext`, deprecated since Go 1.7.
 - Travis CI removed in favour of GitHub Actions.
+- Docker builds are faster and more reliable: dependencies resolve through the
+  module proxy rather than `GOPROXY=direct`, which was prone to truncated
+  transfers; `go.mod`/`go.sum` are copied before the source so editing a `.go`
+  file no longer re-downloads every module; and `.dockerignore` now excludes
+  `.git`, fixtures and docs, cutting the build context from 6.1 MB to 92 KB.
+- All GitHub Actions pinned to current majors, clearing the Node 20 deprecation
+  warnings.
 - The example Compose stack now pins InfluxDB 1.8.10 and Grafana 11.6.6, and
   drops the obsolete `version:` key.
 

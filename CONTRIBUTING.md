@@ -36,6 +36,7 @@ Or individually:
 | `make race`  | Runs all tests under the race detector          |
 | `make cover` | Prints per-function statement coverage          |
 | `make lint`  | Runs `golangci-lint`                            |
+| `make actionlint` | Lints the GitHub Actions workflows         |
 | `make fmt`   | Formats the tree with `gofmt`                   |
 | `make vuln`  | Checks dependencies with `govulncheck`          |
 | `make fuzz`  | Fuzzes each HAR parser (`FUZZTIME=2m` to extend) |
@@ -43,6 +44,31 @@ Or individually:
 
 `make lint` needs [golangci-lint](https://golangci-lint.run/welcome/install/)
 on your `PATH`. Everything else uses only the Go toolchain.
+
+## Releasing
+
+Releases are built by [goreleaser](https://goreleaser.com/) from
+`.goreleaser.yml`, driven by CI. Tagging is the only manual step:
+
+```sh
+git tag -a v1.2.3 -m "v1.2.3"
+git push origin v1.2.3
+```
+
+The `release` job is gated on every other job passing, so a tag cannot publish
+artefacts that fail their own test suite. It creates a draft release; review and
+publish it from the GitHub UI.
+
+To check the release before tagging:
+
+```sh
+make release-check      # validate .goreleaser.yml
+make release-snapshot   # build all artefacts into dist/ without publishing
+```
+
+Both invoke goreleaser via `go run`, so they need network access but no local
+install. CI also runs `goreleaser check` on every push, so a broken release
+config is caught long before tag time.
 
 ## Tests
 

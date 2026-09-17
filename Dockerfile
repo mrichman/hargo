@@ -3,14 +3,22 @@
 # build stage
 FROM golang:1.27.1 AS builder
 WORKDIR /go/src/hargo
-COPY . /go/src/hargo
+
+# Fetch through the module proxy rather than GOPROXY=direct. Going direct pulls
+# from each upstream host, which is slower and prone to truncated transfers
+# ("N bytes of body are still expected") on constrained networks.
+ENV GOPROXY=https://proxy.golang.org,direct
+
+# Resolve dependencies before copying the source, so editing a .go file reuses
+# the cached download layer instead of re-fetching every module.
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
 
 ARG VERSION
 ARG HASH
 ARG DATE
-
-ENV GOPROXY=direct
-RUN go mod download
 
 ENV CGO_ENABLED=0
 ENV GOOS=linux

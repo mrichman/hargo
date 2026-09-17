@@ -1,1 +1,34 @@
+# The build only needs go.mod, go.sum, and the non-test Go sources for
+# ./cmd/hargo and the root package. Everything below is excluded to keep the
+# context small — .git alone accounts for the bulk of the repository.
+
+.git
+.github
+.gitignore
+.dockerignore
+.editorconfig
+.golangci.yml
+.goreleaser.yml
+.travis.yml
+.vscode
+
+# Docs and images
+*.md
+img
+docs
+
+# Test sources, fixtures, and examples. The README mounts test/ at runtime with
+# -v rather than baking it into the image.
+*_test.go
+testdata
+test
+example
+
+# Build and tooling artefacts
+dist
 vendor
+hargo
+hargo-fetch*
+coverage.out
+*.tidybak
+chronograf-v1.db
