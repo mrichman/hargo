@@ -3,67 +3,88 @@ package hargo
 import (
 	"bufio"
 	"encoding/json"
-
 	"fmt"
+	"io"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 )
 
-// Dump prints all HTTP requests in .har file
+// Dump prints all HTTP requests in .har file to stdout.
 func Dump(r *bufio.Reader) {
-	//_, err := Validate(r)
-
-	dec := json.NewDecoder(r)
-	var har Har
-	err := dec.Decode(&har)
-
-	if err != nil {
+	if err := DumpTo(os.Stdout, r); err != nil {
 		log.Error(err)
 	}
+}
 
-	fmt.Println("HAR Version: " + har.Log.Version)
-	fmt.Println("Creator: ", har.Log.Creator.Name+" "+har.Log.Creator.Version)
+// errWriter records the first write error so that a long series of writes does
+// not need an error check on every line.
+type errWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (ew *errWriter) println(args ...interface{}) {
+	if ew.err != nil {
+		return
+	}
+	_, ew.err = fmt.Fprintln(ew.w, args...)
+}
+
+// DumpTo writes all HTTP requests in .har file to w.
+func DumpTo(w io.Writer, r *bufio.Reader) error {
+	dec := json.NewDecoder(r)
+	var har Har
+	if err := dec.Decode(&har); err != nil {
+		return err
+	}
+
+	ew := &errWriter{w: w}
+
+	ew.println("HAR Version: " + har.Log.Version)
+	ew.println("Creator: ", har.Log.Creator.Name+" "+har.Log.Creator.Version)
 
 	for _, entry := range har.Log.Entries {
-		fmt.Println("----------------------------------------------------------------------")
-		fmt.Println("Timestamp: ", entry.StartedDateTime)
-		fmt.Println("Request URL: ", entry.Request.URL)
-		fmt.Println("Request Method: ", entry.Request.Method)
-		fmt.Println("HTTP Version: ", entry.Request.HTTPVersion)
-		fmt.Println("Status Code: ", entry.Response.Status)
-		fmt.Println("Server IP Address: ", entry.ServerIPAddress)
+		ew.println("----------------------------------------------------------------------")
+		ew.println("Timestamp: ", entry.StartedDateTime)
+		ew.println("Request URL: ", entry.Request.URL)
+		ew.println("Request Method: ", entry.Request.Method)
+		ew.println("HTTP Version: ", entry.Request.HTTPVersion)
+		ew.println("Status Code: ", entry.Response.Status)
+		ew.println("Server IP Address: ", entry.ServerIPAddress)
 
-		fmt.Println("Request Headers:")
+		ew.println("Request Headers:")
 
 		for _, req := range entry.Request.Headers {
-			fmt.Println("\t" + req.Name + ": " + req.Value)
+			ew.println("\t" + req.Name + ": " + req.Value)
 		}
 
-		fmt.Println("Querystring Parameters:")
+		ew.println("Querystring Parameters:")
 
 		for _, qs := range entry.Request.QueryString {
-			fmt.Println("\t" + qs.Name + ": " + qs.Value)
+			ew.println("\t" + qs.Name + ": " + qs.Value)
 		}
 
-		fmt.Println("Cookies:")
+		ew.println("Cookies:")
 
 		for _, cookie := range entry.Request.Cookies {
-			fmt.Println("\t🍪 " + cookie.Name + "=" + cookie.Value)
+			ew.println("\t🍪 " + cookie.Name + "=" + cookie.Value)
 		}
 
-		fmt.Println("POST Data:")
+		ew.println("POST Data:")
 
-		fmt.Println("\tMIME Type: " + entry.Request.PostData.MimeType)
+		ew.println("\tMIME Type: " + entry.Request.PostData.MimeType)
 
 		for _, params := range entry.Request.PostData.Params {
-			fmt.Println("\t" + params.Name + ": " + params.Value)
+			ew.println("\t" + params.Name + ": " + params.Value)
 		}
 
-		fmt.Println("Response Headers:")
+		ew.println("Response Headers:")
 
 		for _, res := range entry.Response.Headers {
-			fmt.Println("\t" + res.Name + ": " + res.Value)
+			ew.println("\t" + res.Name + ": " + res.Value)
 		}
-
 	}
+
+	return ew.err
 }

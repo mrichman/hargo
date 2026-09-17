@@ -23,15 +23,20 @@ func Decode(r *bufio.Reader) (Har, error) {
 
 	if err != nil {
 		log.Error(err)
+		return har, err
 	}
 
-	// Delete ws:// entries as they block execution
-	for i, entry := range har.Log.Entries {
-		if strings.HasPrefix(entry.Request.URL, "ws://") {
-			har.Log.Entries[i] = har.Log.Entries[len(har.Log.Entries)-1]
-			har.Log.Entries = har.Log.Entries[:len(har.Log.Entries)-1]
+	// Delete ws:// and wss:// entries as they block execution.
+	// Filter in place rather than swap-deleting, which reads past the end of
+	// the truncated slice once more than one entry is dropped.
+	kept := har.Log.Entries[:0]
+	for _, entry := range har.Log.Entries {
+		if isWebSocket(entry.Request.URL) {
+			continue
 		}
+		kept = append(kept, entry)
 	}
+	har.Log.Entries = kept
 
 	// Sort the entries by StartedDateTime to ensure they will be processed
 	// in the same order as they happened
@@ -39,27 +44,56 @@ func Decode(r *bufio.Reader) (Har, error) {
 		return har.Log.Entries[i].StartedDateTime < har.Log.Entries[j].StartedDateTime
 	})
 
-	return har, err
+	return har, nil
+}
+
+// isWebSocket reports whether rawURL uses a WebSocket scheme. An http.Client
+// cannot dial these, so they are dropped before replay.
+func isWebSocket(rawURL string) bool {
+	return strings.HasPrefix(rawURL, "ws://") || strings.HasPrefix(rawURL, "wss://")
+}
+
+// postBody returns the request body described by pd, preferring the
+// URL-encoded params when present and falling back to the raw text.
+func postBody(pd PostData) string {
+	if len(pd.Params) > 0 {
+		form := url.Values{}
+		for _, p := range pd.Params {
+			form.Add(p.Name, p.Value)
+		}
+		return form.Encode()
+	}
+	return pd.Text
+}
+
+// isPseudoHeader reports whether name is an HTTP/2 pseudo-header such as
+// ":method" or ":authority". Browsers record these in HAR files, but a colon is
+// not legal in an HTTP field name, so they must never be replayed or emitted.
+func isPseudoHeader(name string) bool {
+	return strings.HasPrefix(name, ":")
+}
+
+// isReplayableHeader reports whether a recorded HAR header can be sent on a real
+// HTTP request.
+func isReplayableHeader(name, value string) bool {
+	if isPseudoHeader(name) {
+		return false
+	}
+	return httpguts.ValidHeaderFieldName(name) && httpguts.ValidHeaderFieldValue(value)
 }
 
 // EntryToRequest converts a HAR entry type to an http.Request
 func EntryToRequest(entry *Entry, ignoreHarCookies bool) (*http.Request, error) {
-	body := ""
+	body := postBody(entry.Request.PostData)
 
-	if len(entry.Request.PostData.Params) == 0 {
-		body = entry.Request.PostData.Text
-	} else {
-		form := url.Values{}
-		for _, p := range entry.Request.PostData.Params {
-			form.Add(p.Name, p.Value)
-		}
-		body = form.Encode()
+	req, err := http.NewRequest(entry.Request.Method, entry.Request.URL, bytes.NewBuffer([]byte(body)))
+	if err != nil {
+		return nil, err
 	}
 
-	req, _ := http.NewRequest(entry.Request.Method, entry.Request.URL, bytes.NewBuffer([]byte(body)))
-
 	for _, h := range entry.Request.Headers {
-		if httpguts.ValidHeaderFieldName(h.Name) && httpguts.ValidHeaderFieldValue(h.Value) && h.Name != "Cookie" {
+		// Cookie is skipped in favour of entry.Request.Cookies.
+		if isReplayableHeader(h.Name, h.Value) && !strings.EqualFold(h.Name, "Cookie") {
 			req.Header.Add(h.Name, h.Value)
 		}
 	}
@@ -72,12 +106,6 @@ func EntryToRequest(entry *Entry, ignoreHarCookies bool) (*http.Request, error) 
 	}
 
 	return req, nil
-}
-
-func check(err error) {
-	if err != nil {
-		log.Error(err)
-	}
 }
 
 // NewReader returns a bufio.Reader that will skip over initial UTF-8 byte order marks.
@@ -93,7 +121,9 @@ func NewReader(r io.Reader) *bufio.Reader {
 	if b[0] == 0xef && b[1] == 0xbb && b[2] == 0xbf {
 		log.Warn("BOM detected. Skipping first 3 bytes of file. Consider removing the BOM from this file. " +
 			"See https://tools.ietf.org/html/rfc7159#section-8.1 for details.")
-		buf.Discard(3)
+		// The reader is only advanced past a confirmed BOM, so Discard cannot
+		// fail here.
+		_, _ = buf.Discard(3)
 	}
 	return buf
 }

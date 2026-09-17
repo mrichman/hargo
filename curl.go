@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/alessio/shellescape"
+	"al.essio.dev/pkg/shellescape"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -15,19 +15,17 @@ import (
 func ToCurl(r *bufio.Reader) (string, error) {
 	dec := json.NewDecoder(r)
 	var har Har
-	err := dec.Decode(&har)
-
-	if err != nil {
+	if err := dec.Decode(&har); err != nil {
 		log.Error(err)
+		return "", err
 	}
 
 	var command string
 
 	for _, entry := range har.Log.Entries {
 		cmd, err := fromEntry(entry)
-
 		if err != nil {
-			log.Error(err)
+			return "", err
 		}
 
 		command += cmd + "\n\n"
@@ -55,11 +53,22 @@ func fromEntry(entry Entry) (string, error) {
 	}
 
 	for _, h := range entry.Request.Headers {
+		// HTTP/2 pseudo-headers (":method", ":authority", ...) are recorded by
+		// browsers but are not valid header fields, so curl rejects them.
+		if !isReplayableHeader(h.Name, h.Value) {
+			continue
+		}
+		// Avoid sending cookies twice when -b already carries them.
+		if len(cookies) > 0 && strings.EqualFold(h.Name, "Cookie") {
+			continue
+		}
 		command += " -H " + shellescape.Quote(h.Name+": "+h.Value) + " "
 	}
 
-	if entry.Request.Method == "POST" && len(entry.Request.PostData.Text) > 0 {
-		command += "-d " + shellescape.Quote(entry.Request.PostData.Text)
+	// Emit the body for any method that carries one, not just POST, and
+	// fall back to URL-encoded params when the HAR has no raw text.
+	if body := postBody(entry.Request.PostData); len(body) > 0 {
+		command += "-d " + shellescape.Quote(body)
 	}
 
 	command += " " + shellescape.Quote(entry.Request.URL)

@@ -2,6 +2,9 @@ package hargo
 
 import (
 	"bufio"
+	"compress/flate"
+	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,18 +18,25 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Fetch downloads all resources references in .har file
+// Fetch downloads all resources referenced in .har file into a new
+// timestamped directory under the current working directory.
 func Fetch(r *bufio.Reader) error {
-	har, err := Decode(r)
-
-	check(err)
-
 	datestring := time.Now().Format("20060102150405")
 	outdir := "." + string(filepath.Separator) + "hargo-fetch-" + datestring
+	return FetchTo(r, outdir)
+}
 
-	err = os.Mkdir(outdir, 0777)
+// FetchTo downloads all resources referenced in .har file into outdir,
+// creating it if necessary.
+func FetchTo(r *bufio.Reader, outdir string) error {
+	har, err := Decode(r)
+	if err != nil {
+		return err
+	}
 
-	check(err)
+	if err := os.MkdirAll(outdir, 0o755); err != nil {
+		return err
+	}
 
 	for _, entry := range har.Log.Entries {
 
@@ -34,21 +44,33 @@ func Fetch(r *bufio.Reader) error {
 
 		fmt.Println("URL: " + entry.Request.URL)
 
-		req, _ := http.NewRequest(entry.Request.Method, entry.Request.URL, nil)
+		req, err := http.NewRequest(entry.Request.Method, entry.Request.URL, nil)
+		if err != nil {
+			log.Errorf("skipping entry %s: %v", entry.Request.URL, err)
+			continue
+		}
 
 		for _, h := range entry.Request.Headers {
-			if !strings.HasPrefix(h.Name, ":") {
-				req.Header.Add(h.Name, h.Value)
+			if !isReplayableHeader(h.Name, h.Value) {
+				continue
 			}
+			// Cookie is applied from entry.Request.Cookies below.
+			if strings.EqualFold(h.Name, "Cookie") {
+				continue
+			}
+			// Replaying the recorded Accept-Encoding stops net/http from
+			// transparently decompressing the response, which would write
+			// gzipped bytes to disk under a .html or .js name.
+			if strings.EqualFold(h.Name, "Accept-Encoding") {
+				continue
+			}
+			req.Header.Add(h.Name, h.Value)
 		}
 
 		for _, c := range entry.Request.Cookies {
 			cookie := &http.Cookie{Name: c.Name, Value: c.Value, HttpOnly: false, Domain: c.Domain}
 			req.AddCookie(cookie)
 		}
-
-		//cookie := &http.Cookie{Name: "_hargo", Value: "true", HttpOnly: false}
-		//req.AddCookie(cookie)
 
 		err = downloadFile(req, outdir)
 
@@ -61,28 +83,35 @@ func Fetch(r *bufio.Reader) error {
 	return nil
 }
 
+// uniqueName derives an output file name from urlPath, appending a numeric
+// suffix when that name is already taken so that entries sharing a basename do
+// not silently overwrite each other.
+func uniqueName(outdir, urlPath string) (string, error) {
+	// path.Base returns "/" for a root path and "." for an empty one; neither is
+	// a usable file name. It also strips any ".." traversal.
+	base := path.Base(urlPath)
+	if base == "/" || base == "" || base == "." {
+		base = "index.html"
+	}
+
+	candidate := filepath.Join(outdir, base)
+	if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
+		return candidate, nil
+	}
+
+	ext := path.Ext(base)
+	stem := strings.TrimSuffix(base, ext)
+	for i := 1; i < 10000; i++ {
+		candidate = filepath.Join(outdir, fmt.Sprintf("%s-%d%s", stem, i, ext))
+		if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
+			return candidate, nil
+		}
+	}
+
+	return "", fmt.Errorf("cannot find an unused file name for %q in %s", base, outdir)
+}
+
 func downloadFile(req *http.Request, outdir string) error {
-
-	fileName := path.Base(req.URL.Path)
-
-	if fileName == "/" || fileName == "" {
-		fileName = "index.html"
-	}
-
-	fileName = outdir + string(filepath.Separator) + fileName
-
-	if len(fileName) == 0 {
-		return nil
-	}
-
-	file, err := os.Create(fileName)
-
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	defer file.Close()
-
 	jar, _ := cookiejar.New(nil)
 
 	jar.SetCookies(req.URL, req.Cookies())
@@ -95,20 +124,58 @@ func downloadFile(req *http.Request, outdir string) error {
 		Jar: jar,
 	}
 
-	// spew.Dump(client)
-	// spew.Dump(req)
-
-	resp, err := client.Do(req) //.Get(rawURL) // add a filter to check redirect
-
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
-	size, err := io.Copy(file, resp.Body)
+	// net/http only decompresses automatically when it set Accept-Encoding
+	// itself. A server may still return an encoded body, so undo it here.
+	body := io.Reader(resp.Body)
+	switch enc := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding"))); enc {
+	case "", "identity":
+	case "gzip":
+		zr, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			log.Error(err)
+			return fmt.Errorf("decoding gzip body for %s: %w", req.URL, err)
+		}
+		defer func() { _ = zr.Close() }()
+		body = zr
+	case "deflate":
+		fr := flate.NewReader(resp.Body)
+		defer func() { _ = fr.Close() }()
+		body = fr
+	default:
+		// br and friends are not in the standard library; store as received.
+		log.Warnf("unsupported Content-Encoding %q for %s, saving encoded bytes", enc, req.URL)
+	}
 
+	// Name the file only once the response is in hand, so a failed request does
+	// not leave an empty file behind or consume a name.
+	fileName, err := uniqueName(outdir, req.URL.Path)
 	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	file, err := os.Create(fileName)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	size, err := io.Copy(file, body)
+	if err != nil {
+		_ = file.Close()
+		log.Error(err)
+		return err
+	}
+
+	// A failed close can mean the file was not fully written.
+	if err := file.Close(); err != nil {
 		log.Error(err)
 		return err
 	}

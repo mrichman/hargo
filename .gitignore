@@ -4,6 +4,12 @@ target
 cmd/hargo/hargo-fetch-2*/*
 hargo-fetch*/*
 
+# goreleaser build output
+dist/
+
+# temp copies made by 'make tidy'
+*.tidybak
+
 # Chronograf db
 chronograf-v1.db
 

@@ -2,7 +2,7 @@
 
 # <img src="./img/hargo-logo.png" height="40"> Hargo
 
-[![Hargo Build Status](https://travis-ci.org/mrichman/hargo.svg?branch=master)](https://travis-ci.org/mrichman/hargo)&nbsp;[![GoDoc](https://godoc.org/github.com/mrichman/hargo?status.svg)](https://godoc.org/github.com/mrichman/hargo) [![Go Report Card](https://goreportcard.com/badge/github.com/mrichman/hargo)](https://goreportcard.com/report/github.com/mrichman/hargo) [![Join the chat at https://gitter.im/mrichman/hargo](https://badges.gitter.im/mrichman/hargo.svg)](https://gitter.im/mrichman/hargo) [![GitHub license](https://img.shields.io/github/license/mrichman/hargo.svg)](https://github.com/mrichman/hargo/blob/master/LICENSE)
+[![CI](https://github.com/mrichman/hargo/actions/workflows/ci.yml/badge.svg)](https://github.com/mrichman/hargo/actions/workflows/ci.yml)&nbsp;[![Go Reference](https://pkg.go.dev/badge/github.com/mrichman/hargo.svg)](https://pkg.go.dev/github.com/mrichman/hargo) [![Go Report Card](https://goreportcard.com/badge/github.com/mrichman/hargo)](https://goreportcard.com/report/github.com/mrichman/hargo) [![GitHub license](https://img.shields.io/github/license/mrichman/hargo.svg)](https://github.com/mrichman/hargo/blob/master/LICENSE)
  [![GitHub issues](https://img.shields.io/github/issues/mrichman/hargo.svg)](https://github.com/mrichman/hargo/issues) [![Twitter](https://img.shields.io/twitter/url/https/github.com/mrichman/hargo.svg?style=plastic)](https://twitter.com/intent/tweet?text=Wow:&url=https%3A%2F%2Fgithub.com%2Fmrichman%2Fhargo)
 
 Hargo parses [HAR](https://en.wikipedia.org/wiki/.har) files, can convert to curl format, and serve as a load test driver.
@@ -40,12 +40,17 @@ COPYRIGHT:
 
 ## Building and Running Hargo
 
+Hargo requires Go 1.27.1 or newer.
+
 ```sh
 git clone https://github.com/mrichman/hargo.git
 cd hargo
 make install
 hargo validate test/golang.org.har
 ```
+
+Run `make help` to see every target, or `make check` to run the same checks CI
+runs. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
 
 ## About HAR Files
 
@@ -67,6 +72,14 @@ The `fetch` command downloads all resources references in .har file:
 `hargo fetch foo.har`
 
 This will produce a directory named `hargo-fetch-yyyymmddhhmmss` containing all assets references by the .har file. This is similar to what you'd see when invoking `wget` on a particular URL.
+
+Pass an output directory to use it instead of a timestamped one:
+
+`hargo fetch foo.har ./assets`
+
+Compressed responses are decompressed before being written, and entries whose
+paths share a filename are saved as `name.ext`, `name-1.ext`, and so on rather
+than overwriting each other.
 
 ### Curl
 

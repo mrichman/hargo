@@ -8,37 +8,41 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/blang/semver"
+	"github.com/blang/semver/v4"
 )
 
 func getTag(match ...string) (string, *semver.PRVersion) {
 	args := append([]string{
 		"describe", "--tags",
 	}, match...)
-	if tag, err := exec.Command("git", args...).Output(); err != nil {
+	tag, err := exec.Command("git", args...).Output()
+	if err != nil {
 		return "", nil
-	} else {
-		tagParts := strings.Split(string(tag), "-")
-		if len(tagParts) == 3 {
-			if ahead, err := semver.NewPRVersion(tagParts[1]); err == nil {
-				return tagParts[0], &ahead
-			}
-		}
-
-		return tagParts[0], nil
 	}
+
+	// git describe terminates its output with a newline, which semver.Parse
+	// rejects, so trim before splitting.
+	tagParts := strings.Split(strings.TrimSpace(string(tag)), "-")
+	if len(tagParts) == 3 {
+		if ahead, err := semver.NewPRVersion(tagParts[1]); err == nil {
+			return tagParts[0], &ahead
+		}
+	}
+
+	return tagParts[0], nil
 }
 
 func main() {
 	// Find the last vX.X.X Tag and get how many builds we are ahead of it.
 	versionStr, ahead := getTag("--match", "v*")
-	version, err := semver.Parse(versionStr)
+	// git tags are conventionally prefixed with "v", which semver.Parse rejects,
+	// so strip it before parsing.
+	version, err := semver.Parse(strings.TrimPrefix(versionStr, "v"))
 	if err != nil {
 		// no version tag found so just return what ever we can find.
 		fmt.Println("0.0.0-unknown")
 		return
-	}
-	// Get the tag of the current revision.
+	} // Get the tag of the current revision.
 	tag, _ := getTag("--exact-match")
 	if tag == versionStr {
 		// Seems that we are going to build a release.

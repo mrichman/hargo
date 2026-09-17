@@ -1,17 +1,19 @@
 module github.com/mrichman/hargo
 
-go 1.22
+go 1.27.1
 
 require (
+	al.essio.dev/pkg/shellescape v1.6.1
+	github.com/blang/semver/v4 v4.0.0
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
-	github.com/sirupsen/logrus v1.8.1
-	github.com/urfave/cli v1.21.0
-	golang.org/x/net v0.0.0-20220407224826-aac1ed45d8e3
+	github.com/sirupsen/logrus v1.10.2
+	github.com/urfave/cli v1.22.17
+	golang.org/x/net v0.59.0
 )
 
 require (
-	github.com/alessio/shellescape v1.4.2 // indirect
-	github.com/blang/semver v3.5.1+incompatible // indirect
-	golang.org/x/sys v0.0.0-20220408201424-a24fb2fb8a0f // indirect
-	golang.org/x/text v0.3.7 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
+	github.com/russross/blackfriday/v2 v2.1.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 )

@@ -1,3 +1,21 @@
+// Package hargo reads, validates, and replays HTTP Archive (.har) files.
+//
+// A HAR file is a JSON log of HTTP transactions, exported by browser developer
+// tools and HTTP proxies. This package parses that log into Go types and offers
+// several ways to work with it:
+//
+//   - [Validate] checks that the input parses and declares a supported version.
+//   - [Decode] parses a HAR into a [Har] value, dropping WebSocket entries and
+//     ordering the remainder by start time.
+//   - [Dump] and [DumpTo] print a human-readable summary of every entry.
+//   - [ToCurl] converts each entry into an equivalent curl command line.
+//   - [Run] replays every entry in sequence, honouring the recorded delays.
+//   - [Fetch] and [FetchTo] download every referenced resource to disk.
+//   - [LoadTest] replays entries concurrently for a fixed duration, optionally
+//     recording results to InfluxDB.
+//
+// Functions taking a *bufio.Reader expect one produced by [NewReader], which
+// strips a leading UTF-8 byte order mark if present.
 package hargo
 
 import "time"

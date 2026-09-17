@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -26,6 +27,19 @@ const usage = "work with HTTP Archive (.har) files"
 
 func init() {
 	log.SetLevel(log.InfoLevel)
+}
+
+// openHar opens the .har file named by the first CLI argument.
+func openHar(c *cli.Context) (*os.File, error) {
+	harFile := c.Args().First()
+	if harFile == "" {
+		return nil, cli.NewExitError("must supply a .har file", 1)
+	}
+	file, err := os.Open(harFile)
+	if err != nil {
+		return nil, cli.NewExitError(fmt.Sprintf("cannot open file %s: %v", harFile, err), 1)
+	}
+	return file, nil
 }
 
 func main() {
@@ -61,18 +75,23 @@ func main() {
 			Usage:       "Fetch URLs in .har",
 			UsageText:   "fetch - fetch all URLs",
 			Description: "fetch all URLs found in HAR file, saving all objects in an output directory",
-			ArgsUsage:   "<.har file> <output dir>",
-			Action: func(c *cli.Context) {
-				harFile := c.Args().First()
-				log.Infof("fetch .har file: %s", harFile)
-				file, err := os.Open(harFile)
-				if err == nil {
-					r := hargo.NewReader(file)
-					hargo.Fetch(r)
-				} else {
-					log.Fatal("Cannot open file: ", harFile)
-					os.Exit(-1)
+			ArgsUsage:   "<.har file> [output dir]",
+			Action: func(c *cli.Context) error {
+				file, err := openHar(c)
+				if err != nil {
+					return err
 				}
+				defer func() { _ = file.Close() }()
+
+				log.Infof("fetch .har file: %s", c.Args().First())
+				r := hargo.NewReader(file)
+
+				// An explicit output directory is optional; without one a
+				// timestamped directory is created in the working directory.
+				if outdir := c.Args().Get(1); outdir != "" {
+					return hargo.FetchTo(r, outdir)
+				}
+				return hargo.Fetch(r)
 			},
 		},
 		{
@@ -82,23 +101,21 @@ func main() {
 			UsageText:   "curl - convert .har file to curl format",
 			Description: "convert all .har file entries to curl commands",
 			ArgsUsage:   "<.har file>",
-			Action: func(c *cli.Context) {
-				harFile := c.Args().First()
-				log.Infof("curl .har file: %s", harFile)
-				file, err := os.Open(harFile)
-				if err == nil {
-					r := hargo.NewReader(file)
-					cmd, err := hargo.ToCurl(r)
-
-					if err != nil {
-						log.Error(err)
-					}
-
-					fmt.Println(cmd)
-				} else {
-					log.Fatal("Cannot open file: ", harFile)
-					os.Exit(-1)
+			Action: func(c *cli.Context) error {
+				file, err := openHar(c)
+				if err != nil {
+					return err
 				}
+				defer func() { _ = file.Close() }()
+
+				log.Infof("curl .har file: %s", c.Args().First())
+				cmd, err := hargo.ToCurl(hargo.NewReader(file))
+				if err != nil {
+					return err
+				}
+
+				fmt.Println(cmd)
+				return nil
 			},
 		},
 		{
@@ -116,19 +133,18 @@ func main() {
 					Name:  "insecure-skip-verify",
 					Usage: "Skips the TLS security checks"},
 			},
-			Action: func(c *cli.Context) {
+			Action: func(c *cli.Context) error {
 				ignoreHarCookies := c.Bool("ignore-har-cookies")
 				insecureSkipVerify := c.Bool("insecure-skip-verify")
-				harFile := c.Args().First()
-				log.Info("run .har file: ", harFile)
-				file, err := os.Open(harFile)
-				if err == nil {
-					r := hargo.NewReader(file)
-					hargo.Run(r, ignoreHarCookies, insecureSkipVerify)
-				} else {
-					log.Fatal("Cannot open file: ", harFile)
-					os.Exit(-1)
+
+				file, err := openHar(c)
+				if err != nil {
+					return err
 				}
+				defer func() { _ = file.Close() }()
+
+				log.Info("run .har file: ", c.Args().First())
+				return hargo.Run(hargo.NewReader(file), ignoreHarCookies, insecureSkipVerify)
 			},
 		},
 		{
@@ -138,17 +154,20 @@ func main() {
 			UsageText:   "validate - validates the format of a .har file",
 			Description: "validates the format of a .har file",
 			ArgsUsage:   "<.har file>",
-			Action: func(c *cli.Context) {
-				harFile := c.Args().First()
-				log.Info("validate .har file: ", harFile)
-				file, err := os.Open(harFile)
-				if err == nil {
-					r := hargo.NewReader(file)
-					hargo.Validate(r)
-				} else {
-					log.Fatal("Cannot open file: ", harFile)
-					os.Exit(-1)
+			Action: func(c *cli.Context) error {
+				file, err := openHar(c)
+				if err != nil {
+					return err
 				}
+				defer func() { _ = file.Close() }()
+
+				log.Info("validate .har file: ", c.Args().First())
+				if _, err := hargo.Validate(hargo.NewReader(file)); err != nil {
+					// -2 is preserved for compatibility: it surfaces as exit 254.
+					return cli.NewExitError(err.Error(), -2)
+				}
+				fmt.Println("Valid HAR file! 😊")
+				return nil
 			},
 		},
 		{
@@ -158,17 +177,15 @@ func main() {
 			UsageText:   "dump - print all HTTP requests in .har file",
 			Description: "print all HTTP requests in .har file",
 			ArgsUsage:   "<.har file>",
-			Action: func(c *cli.Context) {
-				harFile := c.Args().First()
-				log.Info("dump .har file: ", harFile)
-				file, err := os.Open(harFile)
-				if err == nil {
-					r := hargo.NewReader(file)
-					hargo.Dump(r)
-				} else {
-					log.Fatal("Cannot open file: ", harFile)
-					os.Exit(-1)
+			Action: func(c *cli.Context) error {
+				file, err := openHar(c)
+				if err != nil {
+					return err
 				}
+				defer func() { _ = file.Close() }()
+
+				log.Info("dump .har file: ", c.Args().First())
+				return hargo.DumpTo(os.Stdout, hargo.NewReader(file))
 			},
 		},
 		{
@@ -197,42 +214,47 @@ func main() {
 					Name:  "insecure-skip-verify",
 					Usage: "Skips the TLS security checks"},
 			},
-			Action: func(c *cli.Context) {
+			Action: func(c *cli.Context) error {
 
 				if c.GlobalBool("debug") {
 					log.Info("Setting debug log level")
 					log.SetLevel(log.DebugLevel)
 				}
 
+				file, err := openHar(c)
+				if err != nil {
+					return err
+				}
+				defer func() { _ = file.Close() }()
+
 				harFile := c.Args().First()
-
-				if len(harFile) == 0 {
-					log.Fatal("Must supply a .har file")
-					os.Exit(-1)
-				}
-
 				log.Info("load test .har file: ", harFile)
-				file, err := os.Open(harFile)
-				if err == nil {
-					workers := c.Int("w")
-					duration := c.Int("d")
-					u, err := url.Parse(c.String("u"))
-					ignoreHarCookies := c.Bool("ignore-har-cookies")
-					insecureSkipVerify := c.Bool("insecure-skip-verify")
 
-					if err != nil {
-						log.Fatal("Invalid InfluxDB URL: ", c.String("u"))
-						os.Exit(-1)
-					}
+				workers := c.Int("w")
+				duration := c.Int("d")
+				ignoreHarCookies := c.Bool("ignore-har-cookies")
+				insecureSkipVerify := c.Bool("insecure-skip-verify")
 
-					hargo.LoadTest(filepath.Base(harFile), file, workers, time.Duration(duration)*time.Second, *u, ignoreHarCookies, insecureSkipVerify)
-				} else {
-					log.Fatal("Cannot open file: ", harFile)
-					os.Exit(-1)
+				u, err := url.Parse(c.String("u"))
+				if err != nil {
+					return cli.NewExitError(fmt.Sprintf("invalid InfluxDB URL %q: %v", c.String("u"), err), 1)
 				}
+
+				return hargo.LoadTest(filepath.Base(harFile), file, workers,
+					time.Duration(duration)*time.Second, *u, ignoreHarCookies, insecureSkipVerify)
 			},
 		},
 	}
 
-	app.Run(os.Args)
+	if err := app.Run(os.Args); err != nil {
+		// cli.ExitCoder values carry their own exit status; anything else is a
+		// plain failure. errors.As so a wrapped ExitCoder is still honoured.
+		var ec cli.ExitCoder
+		if errors.As(err, &ec) {
+			log.Error(ec.Error())
+			os.Exit(ec.ExitCode())
+		}
+		log.Error(err)
+		os.Exit(1)
+	}
 }

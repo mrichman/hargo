@@ -23,8 +23,8 @@ func newInfluxDBClient(u url.URL) (client.Client, error) {
 	})
 
 	if err != nil {
-		log.Fatal("Error: ", err)
-		return c, err
+		log.Error("Error: ", err)
+		return nil, err
 	}
 
 	retry := 1
@@ -40,7 +40,7 @@ func newInfluxDBClient(u url.URL) (client.Client, error) {
 		}
 	}
 
-	db = strings.Replace(u.Path, "/", "", -1)
+	db = strings.ReplaceAll(u.Path, "/", "")
 
 	log.Info("DB: ", db)
 
@@ -60,19 +60,26 @@ func newInfluxDBClient(u url.URL) (client.Client, error) {
 func WritePoint(u url.URL, results chan TestResult) {
 	c, err := newInfluxDBClient(u)
 
-	if err != nil {
+	if err != nil || c == nil {
+		// Without a client there is nowhere to write. Drain results so the
+		// workers producing them are never blocked.
 		log.Warn("No test results will be recorded to InfluxDB")
-	} else {
-		log.Info("Recording results to InfluxDB: ", u.String())
+		for range results {
+		}
+		return
 	}
 
-	for {
-		result := <-results
+	log.Info("Recording results to InfluxDB: ", u.String())
 
+	for result := range results {
 		bp, err := client.NewBatchPoints(client.BatchPointsConfig{
 			Database:  db,
 			Precision: "ms",
 		})
+		if err != nil {
+			log.Error("Error: ", err)
+			continue
+		}
 
 		fields := map[string]interface{}{
 			"URL":       result.URL,
@@ -84,17 +91,15 @@ func WritePoint(u url.URL, results chan TestResult) {
 			"HarFile":   result.HarFile}
 
 		pt, err := client.NewPoint("test_result", nil, fields, time.Now())
-
 		if err != nil {
-			log.Fatalln("Error: ", err)
+			log.Error("Error: ", err)
+			continue
 		}
 
 		bp.AddPoint(pt)
 
-		err = c.Write(bp)
-
-		if err != nil {
-			log.Fatalln("Error: ", err)
+		if err := c.Write(bp); err != nil {
+			log.Error("Error: ", err)
 		}
 	}
 }

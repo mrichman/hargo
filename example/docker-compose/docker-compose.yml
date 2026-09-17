@@ -1,16 +1,17 @@
-version: '3'
 services:
   hargo:
     build:
-      context: ../../  
+      context: ../../
     image: hargo
     command: hargo load -u=http://influxdb:8086/hargo /test/golang.org.har
     volumes:
       - ../../test:/test
     depends_on:
-      - influxdb  
+      - influxdb
   influxdb:
-    image: influxdb:1.8.0
+    # hargo speaks the InfluxDB 1.x line protocol via influxdb1-client, so this
+    # stays on the final 1.8.x release rather than 2.x/3.x.
+    image: influxdb:1.8.10
     ports:
       - '8086:8086'
     volumes:
@@ -20,7 +21,7 @@ services:
       - INFLUXDB_ADMIN_USER=hargo
       - INFLUXDB_ADMIN_PASSWORD=hargo
   grafana:
-    image: grafana/grafana:7.0.4
+    image: grafana/grafana:11.6.6
     ports:
       - '3000:3000'
     volumes:
@@ -32,5 +33,5 @@ services:
       - GF_SECURITY_ADMIN_USER=hargo
       - GF_SECURITY_ADMIN_PASSWORD=hargo
 volumes:
-  grafana: 
+  grafana:
   influxdb:

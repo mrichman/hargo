@@ -8,6 +8,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -19,7 +20,6 @@ func LoadTest(harfile string, file *os.File, workers int, timeout time.Duration,
 	log.Infof("Starting load test with %d workers. Duration %v.", workers, timeout)
 
 	results := make(chan TestResult)
-	defer close(results)
 	stop := make(chan bool)
 	entries := make(chan Entry, workers)
 
@@ -27,34 +27,45 @@ func LoadTest(harfile string, file *os.File, workers int, timeout time.Duration,
 
 	// if a InfluxDB URL is given the metrics will be written to that instance
 	// if not the dummy consumer is initiated.
+	consumerDone := make(chan struct{})
 	if (url.URL{}) != u {
-		go WritePoint(u, results)
+		go func() {
+			defer close(consumerDone)
+			WritePoint(u, results)
+		}()
 	} else {
-		go func(results chan TestResult) {
-			for {
-				<-results
+		go func() {
+			defer close(consumerDone)
+			for range results {
 			}
-		}(results)
+		}()
 	}
 
-	go wait(stop, timeout, workers)
+	go wait(stop, timeout)
 
+	var wg sync.WaitGroup
 	for i := 0; i < workers; i++ {
-		go processEntries(harfile, i, entries, results, ignoreHarCookies, insecureSkipVerify, stop)
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			processEntries(harfile, worker, entries, results, ignoreHarCookies, insecureSkipVerify, stop)
+		}(i)
 	}
 
-	for {
-		select {
-		case <-stop:
-		}
-		break
-	}
+	<-stop
+
+	// Close results only once every producer has exited, otherwise a worker
+	// still in flight sends on a closed channel and panics.
+	wg.Wait()
+	close(results)
+	<-consumerDone
+
 	fmt.Printf("\nTimeout of %.1fs elapsed. Terminating load test.\n", timeout.Seconds())
 	return nil
 }
 
 // wait will close the stop chan when the timeout is hit.
-func wait(stop chan bool, timeout time.Duration, workers int) {
+func wait(stop chan bool, timeout time.Duration) {
 	time.Sleep(timeout)
 	close(stop)
 }
@@ -64,10 +75,12 @@ func processEntries(harfile string, worker int, entries chan Entry, results chan
 
 	httpClient := http.Client{
 		Transport: &http.Transport{
-			Dial: (&net.Dialer{
+			// DialContext rather than the deprecated Dial, so an in-flight dial
+			// is cancelled as soon as it is no longer needed.
+			DialContext: (&net.Dialer{
 				Timeout:   30 * time.Second,
 				KeepAlive: 30 * time.Second,
-			}).Dial,
+			}).DialContext,
 			TLSClientConfig:       &tls.Config{InsecureSkipVerify: insecureSkipVerify},
 			TLSHandshakeTimeout:   10 * time.Second,
 			ResponseHeaderTimeout: 10 * time.Second,
@@ -81,16 +94,21 @@ func processEntries(harfile string, worker int, entries chan Entry, results chan
 	}
 	iter := 0
 	for {
-
 		select {
 		case <-stop:
-			break
-		case entry := <-entries:
+			return
+		case entry, ok := <-entries:
+			if !ok {
+				return
+			}
+
 			msg := fmt.Sprintf("[%d,%d] %s", worker, iter, entry.Request.URL)
 
 			req, err := EntryToRequest(&entry, ignoreHarCookies)
-
-			check(err)
+			if err != nil {
+				log.Errorf("skipping entry %s: %v", entry.Request.URL, err)
+				continue
+			}
 
 			jar.SetCookies(req.URL, req.Cookies())
 
@@ -101,10 +119,9 @@ func processEntries(harfile string, worker int, entries chan Entry, results chan
 			method := req.Method
 
 			if err != nil {
-
 				log.Error(err)
 				log.Error(entry)
-				tr := TestResult{
+				results <- TestResult{
 					URL:       req.URL.String(),
 					Status:    0,
 					StartTime: startTime,
@@ -112,28 +129,24 @@ func processEntries(harfile string, worker int, entries chan Entry, results chan
 					Latency:   latency,
 					Method:    method,
 					HarFile:   harfile}
-				results <- tr
 				continue
 			}
 
-			if resp != nil {
-				resp.Body.Close()
-			}
+			status := resp.StatusCode
+			_ = resp.Body.Close()
 
-			msg += fmt.Sprintf(" %d %dms", resp.StatusCode, latency)
+			msg += fmt.Sprintf(" %d %dms", status, latency)
 
 			log.Infoln(msg)
 
-			tr := TestResult{
+			results <- TestResult{
 				URL:       req.URL.String(),
-				Status:    resp.StatusCode,
+				Status:    status,
 				StartTime: startTime,
 				EndTime:   endTime,
 				Latency:   latency,
 				Method:    method,
 				HarFile:   harfile}
-
-			results <- tr
 		}
 		iter++
 	}
