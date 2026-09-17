@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-09-17
+
+### Fixed
+
+- A test assertion that failed on Windows, where the clock granularity is around
+  15ms: `TestSummaryAccumulatorComputesFigures` recorded four results and then
+  required a positive measured elapsed time, but four instant additions
+  legitimately take no measurable time on such a platform. No library code
+  changed, so v2.0.0 and v2.0.1 are identical for consumers; this release exists
+  so the tagged build is green and its release artefacts are published.
+
 ## [2.0.0] - 2026-09-17
 
 ### Changed

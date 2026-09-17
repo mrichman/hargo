@@ -64,6 +64,12 @@ func TestSummaryAccumulatorComputesFigures(t *testing.T) {
 	acc.add(TestResult{Status: 404, Duration: 30 * time.Millisecond})
 	acc.add(TestResult{Status: 0, Duration: 40 * time.Millisecond})
 
+	// Elapsed is measured from the accumulator's creation, so the clock needs
+	// something to measure. Four instant additions genuinely take no time on a
+	// platform whose timer granularity is coarse — Windows' is around 15ms — and
+	// a zero Elapsed there is a truthful measurement rather than a bug.
+	time.Sleep(20 * time.Millisecond)
+
 	s := acc.summary()
 
 	if s.Requests != 4 {
@@ -94,8 +100,10 @@ func TestSummaryAccumulatorComputesFigures(t *testing.T) {
 		}
 	}
 
-	// Elapsed is measured, so it cannot be asserted exactly, but it must be a
-	// real observation rather than a configured duration.
+	// Elapsed is measured rather than taken from a configured duration, so it
+	// cannot be asserted exactly. The sleep above guarantees at least one clock
+	// tick has passed; asserting the full 20ms would itself be flaky, since a
+	// 20ms sleep spans one or two 15.6ms ticks and can measure as 15.6ms.
 	if s.Elapsed <= 0 {
 		t.Errorf("Elapsed = %v, want a positive measured duration", s.Elapsed)
 	}
